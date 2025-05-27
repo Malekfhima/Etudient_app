@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt
 from database import Database
 from models import Note, Matiere, ResultatEtudiant, Etudiant
+from datetime import datetime
 
 class NotesWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -32,37 +33,100 @@ class NotesWindow(QMainWindow):
         # Section de filtrage
         filter_layout = QHBoxLayout()
         
+        # Groupe pour le niveau
+        niveau_group = QVBoxLayout()
+        niveau_label = QLabel("Niveau:")
+        niveau_label.setStyleSheet("font-weight: bold;")
         self.niveau_combo = QComboBox()
         self.niveau_combo.addItems(Etudiant.NIVEAUX)
+        self.niveau_combo.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                min-width: 150px;
+            }
+        """)
+        niveau_group.addWidget(niveau_label)
+        niveau_group.addWidget(self.niveau_combo)
         
+        # Groupe pour la filière
+        filiere_group = QVBoxLayout()
+        filiere_label = QLabel("Filière:")
+        filiere_label.setStyleSheet("font-weight: bold;")
         self.filiere_combo = QComboBox()
+        self.filiere_combo.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                min-width: 150px;
+            }
+        """)
+        filiere_group.addWidget(filiere_label)
+        filiere_group.addWidget(self.filiere_combo)
         
-        # Ajout du sélecteur de trimestre
+        # Groupe pour le trimestre
+        trimestre_group = QVBoxLayout()
+        trimestre_label = QLabel("Trimestre:")
+        trimestre_label.setStyleSheet("font-weight: bold;")
         self.trimestre_combo = QComboBox()
         self.trimestre_combo.addItems(['Trimestre 1', 'Trimestre 2', 'Trimestre 3'])
+        self.trimestre_combo.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                min-width: 150px;
+            }
+        """)
+        trimestre_group.addWidget(trimestre_label)
+        trimestre_group.addWidget(self.trimestre_combo)
         
-        filter_layout.addWidget(QLabel("Niveau:"))
-        filter_layout.addWidget(self.niveau_combo)
-        filter_layout.addWidget(QLabel("Filière:"))
-        filter_layout.addWidget(self.filiere_combo)
-        filter_layout.addWidget(QLabel("Trimestre:"))
-        filter_layout.addWidget(self.trimestre_combo)
+        # Ajouter les groupes au layout de filtrage
+        filter_layout.addLayout(niveau_group)
+        filter_layout.addLayout(filiere_group)
+        filter_layout.addLayout(trimestre_group)
         filter_layout.addStretch()
         
-        # Bouton de rafraîchissement
-        self.btn_refresh = QPushButton("Rafraîchir la liste")
+        # Boutons d'action
+        buttons_group = QHBoxLayout()
+        
+        # Bouton Afficher
+        self.btn_afficher = QPushButton("Afficher")
+        self.btn_afficher.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        
+        # Bouton Rafraîchir
+        self.btn_refresh = QPushButton("Rafraîchir")
         self.btn_refresh.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
-                padding: 5px 10px;
-                border-radius: 3px;
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 100px;
             }
             QPushButton:hover {
                 background-color: #45a049;
             }
         """)
-        filter_layout.addWidget(self.btn_refresh)
+        
+        buttons_group.addWidget(self.btn_afficher)
+        buttons_group.addWidget(self.btn_refresh)
+        filter_layout.addLayout(buttons_group)
         
         main_layout.addLayout(filter_layout)
         
@@ -78,6 +142,24 @@ class NotesWindow(QMainWindow):
         self.table_etudiants.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_etudiants.setSelectionMode(QTableWidget.SingleSelection)
         self.table_etudiants.setAlternatingRowColors(True)
+        self.table_etudiants.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QHeaderView::section {
+                background-color: #f5f5f5;
+                padding: 5px;
+                border: none;
+                border-right: 1px solid #ddd;
+                border-bottom: 1px solid #ddd;
+                font-weight: bold;
+            }
+        """)
         main_layout.addWidget(self.table_etudiants)
         
         # Section des notes
@@ -114,15 +196,20 @@ class NotesWindow(QMainWindow):
         main_layout.addLayout(notes_layout)
         
         # Connexions des signaux
+        self.setup_connections()
+        
+        # Initialiser les filières
+        self.niveau_change(self.niveau_combo.currentText())
+
+    def setup_connections(self):
+        """Configure les connexions des signaux"""
         self.niveau_combo.currentTextChanged.connect(self.niveau_change)
         self.filiere_combo.currentTextChanged.connect(self.filiere_change)
         self.trimestre_combo.currentIndexChanged.connect(self.trimestre_change)
         self.btn_refresh.clicked.connect(self.rafraichir_liste)
         self.btn_calculer.clicked.connect(self.calculer_moyennes)
         self.btn_enregistrer.clicked.connect(self.enregistrer_notes)
-        
-        # Initialiser les filières
-        self.niveau_change(self.niveau_combo.currentText())
+        self.btn_afficher.clicked.connect(self.afficher_etudiants)
 
     def rafraichir_liste(self):
         """Force le rechargement de la liste des étudiants"""
@@ -354,6 +441,110 @@ class NotesWindow(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible d'enregistrer les notes: {str(e)}")
+
+    def afficher_etudiants(self):
+        """Affiche les étudiants selon le niveau et la filière sélectionnés"""
+        niveau = self.niveau_combo.currentText()
+        filiere = self.filiere_combo.currentText()
+        
+        if not niveau or not filiere:
+            QMessageBox.warning(self, "Attention", "Veuillez sélectionner un niveau et une filière")
+            return
+            
+        try:
+            # Récupérer et filtrer les étudiants
+            tous_etudiants = self.db.get_all_etudiants()
+            etudiants_filtres = [
+                etudiant for etudiant in tous_etudiants
+                if etudiant.niveau == niveau and etudiant.filiere == filiere
+            ]
+            
+            # Mettre à jour le tableau
+            self.table_etudiants.setRowCount(len(etudiants_filtres))
+            
+            for row, etudiant in enumerate(etudiants_filtres):
+                # Calculer les moyennes par trimestre
+                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule)
+                
+                # Calculer la moyenne générale
+                moyenne_generale = 0.0
+                if all(trim in moyennes_trim for trim in [1, 2, 3]):
+                    moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
+                
+                # Déterminer la mention
+                mention = ResultatEtudiant.calculer_mention(moyenne_generale)
+                
+                # Créer les items du tableau
+                items = [
+                    QTableWidgetItem(etudiant.matricule),
+                    QTableWidgetItem(etudiant.nom),
+                    QTableWidgetItem(etudiant.prenom),
+                    QTableWidgetItem(f"{moyennes_trim.get(1, 0.0):.2f}"),
+                    QTableWidgetItem(f"{moyennes_trim.get(2, 0.0):.2f}"),
+                    QTableWidgetItem(f"{moyennes_trim.get(3, 0.0):.2f}"),
+                    QTableWidgetItem(f"{moyenne_generale:.2f}"),
+                    QTableWidgetItem(mention)
+                ]
+                
+                # Ajouter les items au tableau
+                for col, item in enumerate(items):
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    self.table_etudiants.setItem(row, col, item)
+                
+                # Ajouter le bouton Gérer les notes
+                btn_notes = QPushButton("Gérer les notes")
+                btn_notes.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2196F3;
+                        color: white;
+                        border: none;
+                        padding: 5px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #1976D2;
+                    }
+                """)
+                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(e))
+                self.table_etudiants.setCellWidget(row, 8, btn_notes)
+            
+            # Afficher un message de statut
+            message = f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}"
+            self.statusBar().showMessage(message, 3000)
+            
+            # Sauvegarder les résultats dans un fichier
+            self.sauvegarder_resultats_filtres(etudiants_filtres, niveau, filiere)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de l'affichage des étudiants : {str(e)}")
+            self.statusBar().showMessage("Erreur lors de l'affichage des étudiants", 3000)
+
+    def sauvegarder_resultats_filtres(self, etudiants, niveau, filiere):
+        """Sauvegarde les résultats filtrés dans un fichier texte"""
+        try:
+            nom_fichier = f"resultats_{niveau}_{filiere}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            with open(nom_fichier, 'w', encoding='utf-8') as f:
+                f.write(f"=== Résultats pour {niveau} - {filiere} ===\n\n")
+                
+                for etudiant in etudiants:
+                    moyennes = self.calculer_moyennes_trimestres(etudiant.matricule)
+                    moyenne_generale = 0.0
+                    if all(trim in moyennes for trim in [1, 2, 3]):
+                        moyenne_generale = (moyennes[1] + moyennes[2] + (2 * moyennes[3])) / 4
+                    
+                    f.write(f"Étudiant: {etudiant.nom} {etudiant.prenom}\n")
+                    f.write(f"Matricule: {etudiant.matricule}\n")
+                    f.write(f"Moyennes par trimestre:\n")
+                    f.write(f"  - Trimestre 1: {moyennes.get(1, 0.0):.2f}\n")
+                    f.write(f"  - Trimestre 2: {moyennes.get(2, 0.0):.2f}\n")
+                    f.write(f"  - Trimestre 3: {moyennes.get(3, 0.0):.2f}\n")
+                    f.write(f"Moyenne générale: {moyenne_generale:.2f}\n")
+                    f.write(f"Mention: {ResultatEtudiant.calculer_mention(moyenne_generale)}\n")
+                    f.write("\n" + "-"*50 + "\n\n")
+                
+            print(f"Résultats sauvegardés dans {nom_fichier}")
+        except Exception as e:
+            print(f"Erreur lors de la sauvegarde des résultats: {str(e)}")
 
     def closeEvent(self, event):
         # Ne pas fermer la base de données ici

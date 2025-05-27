@@ -1,4 +1,5 @@
 import sys
+import os
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QTableWidgetItem, QPushButton
 from PyQt5.QtCore import QDate, Qt
@@ -16,12 +17,29 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.setup_connections()
         self.current_matricule = None
         self.notes_window = None
-        self.charger_etudiants()  # Charger les étudiants après l'initialisation
+        # Charger les étudiants depuis le fichier texte au démarrage
+        self.charger_etudiants_txt()
+        # Charger tous les étudiants au démarrage
+        self.charger_etudiants()
 
     def setup_ui(self):
         # Configuration des placeholders
         self.nom_input.setPlaceholderText("Entrez le nom...")
         self.prenom_input.setPlaceholderText("Entrez le prénom...")
+        
+        # Configuration des en-têtes du tableau
+        self.table_etudiants.setHorizontalHeaderLabels([
+            "Matricule",
+            "Nom",
+            "Prénom",
+            "Date de naissance",
+            "Sexe",
+            "Filière",
+            "Niveau"
+        ])
+        # Ajuster la taille des colonnes
+        self.table_etudiants.horizontalHeader().setStretchLastSection(True)
+        self.table_etudiants.horizontalHeader().setVisible(True)
         
         # Configuration de la date
         self.date_naissance_input.setDisplayFormat("dd/MM/yyyy")
@@ -93,6 +111,8 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         filiere = self.filiere_combo.currentText()
         
         if not niveau or not filiere:  # Si aucun niveau ou filière n'est sélectionné
+            self.table_etudiants.setRowCount(0)
+            self.statusBar().showMessage("Veuillez sélectionner un niveau et une filière", 3000)
             return
         
         try:
@@ -112,14 +132,14 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
                 
             # Afficher un message avec le nombre d'étudiants trouvés
             if etudiants_filtres:
-                self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}")
+                self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}", 3000)
             else:
-                self.statusBar().showMessage(f"Aucun étudiant trouvé pour {niveau} - {filiere}")
+                self.statusBar().showMessage(f"Aucun étudiant trouvé pour {niveau} - {filiere}", 3000)
                 
         except Exception as e:
             print(f"Erreur dans filtrer_etudiants: {str(e)}")  # Debug
             QMessageBox.critical(self, "Erreur", f"Impossible de filtrer les étudiants: {str(e)}")
-            self.statusBar().showMessage("Erreur lors du filtrage des étudiants")
+            self.statusBar().showMessage("Erreur lors du filtrage des étudiants", 3000)
 
     def valider_champs(self):
         """Valide les champs en temps réel et active/désactive les boutons en conséquence"""
@@ -187,6 +207,50 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             
         return True
 
+    def sauvegarder_etudiant_txt(self, etudiant):
+        """Sauvegarde les informations d'un étudiant dans un fichier texte"""
+        try:
+            with open('etudiants.txt', 'a', encoding='utf-8') as f:
+                # Format: matricule|nom|prenom|date_naissance|sexe|filiere|niveau
+                ligne = f"{etudiant.matricule}|{etudiant.nom}|{etudiant.prenom}|{etudiant.date_naissance}|{etudiant.sexe}|{etudiant.filiere}|{etudiant.niveau}\n"
+                f.write(ligne)
+            print(f"Étudiant sauvegardé dans etudiants.txt: {etudiant.nom} {etudiant.prenom}")
+        except Exception as e:
+            print(f"Erreur lors de la sauvegarde dans le fichier texte: {str(e)}")
+            QMessageBox.warning(self, "Avertissement", "Impossible de sauvegarder dans le fichier texte")
+
+    def charger_etudiants_txt(self):
+        """Charge et affiche les étudiants depuis le fichier texte"""
+        try:
+            self.table_etudiants.setRowCount(0)
+            if not os.path.exists('etudiants.txt'):
+                return
+                
+            with open('etudiants.txt', 'r', encoding='utf-8') as f:
+                lignes = f.readlines()
+                
+            self.table_etudiants.setRowCount(len(lignes))
+            for row, ligne in enumerate(lignes):
+                # Découper la ligne en utilisant le séparateur |
+                donnees = ligne.strip().split('|')
+                if len(donnees) == 7:  # Vérifier que nous avons toutes les données
+                    matricule, nom, prenom, date_naissance, sexe, filiere, niveau = donnees
+                    etudiant = Etudiant(
+                        matricule=matricule,
+                        nom=nom,
+                        prenom=prenom,
+                        date_naissance=date_naissance,
+                        sexe=sexe,
+                        filiere=filiere,
+                        niveau=niveau
+                    )
+                    self.afficher_etudiant(row, etudiant)
+                    
+            self.statusBar().showMessage(f"{len(lignes)} étudiant(s) chargé(s) depuis le fichier texte", 3000)
+        except Exception as e:
+            print(f"Erreur lors du chargement du fichier texte: {str(e)}")
+            QMessageBox.critical(self, "Erreur", "Impossible de charger le fichier texte des étudiants")
+
     def ajouter_etudiant(self):
         if not self.valider_formulaire():
             return
@@ -203,13 +267,39 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             )
 
             if self.db.ajouter_etudiant(etudiant):
+                # Sauvegarder dans le fichier texte
+                self.sauvegarder_etudiant_txt(etudiant)
+                
                 QMessageBox.information(self, "Succès", "Étudiant ajouté avec succès!")
                 self.effacer_formulaire()
-                self.filtrer_etudiants()  # Mettre à jour la liste avec le filtre actuel
+                # Mettre à jour la liste avec le filtre actuel
+                self.filtrer_etudiants()
+                # Sélectionner le niveau et la filière du nouvel étudiant
+                niveau_index = self.niveau_combo.findText(etudiant.niveau)
+                if niveau_index >= 0:
+                    self.niveau_combo.setCurrentIndex(niveau_index)
+                filiere_index = self.filiere_combo.findText(etudiant.filiere)
+                if filiere_index >= 0:
+                    self.filiere_combo.setCurrentIndex(filiere_index)
+                # Afficher un message dans la barre de statut
+                self.statusBar().showMessage(f"Étudiant {etudiant.nom} {etudiant.prenom} ajouté avec succès", 3000)
             else:
                 QMessageBox.critical(self, "Erreur", "Impossible d'ajouter l'étudiant")
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {str(e)}")
+
+    def mettre_a_jour_fichier_txt(self):
+        """Met à jour le fichier texte avec tous les étudiants actuels"""
+        try:
+            etudiants = self.db.get_all_etudiants()
+            with open('etudiants.txt', 'w', encoding='utf-8') as f:
+                for etudiant in etudiants:
+                    ligne = f"{etudiant.matricule}|{etudiant.nom}|{etudiant.prenom}|{etudiant.date_naissance}|{etudiant.sexe}|{etudiant.filiere}|{etudiant.niveau}\n"
+                    f.write(ligne)
+            print("Fichier texte mis à jour avec succès")
+        except Exception as e:
+            print(f"Erreur lors de la mise à jour du fichier texte: {str(e)}")
+            QMessageBox.warning(self, "Avertissement", "Impossible de mettre à jour le fichier texte")
 
     def modifier_etudiant(self):
         if not self.current_matricule:
@@ -231,6 +321,9 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
 
         try:
             if self.db.modifier_etudiant(etudiant):
+                # Mettre à jour le fichier texte
+                self.mettre_a_jour_fichier_txt()
+                
                 QMessageBox.information(self, "Succès", "Étudiant modifié avec succès!")
                 self.charger_etudiants()
                 self.effacer_formulaire()
@@ -254,6 +347,9 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         if reponse == QMessageBox.Yes:
             try:
                 if self.db.supprimer_etudiant(self.current_matricule):
+                    # Mettre à jour le fichier texte
+                    self.mettre_a_jour_fichier_txt()
+                    
                     QMessageBox.information(self, "Succès", "Étudiant supprimé avec succès!")
                     self.charger_etudiants()
                     self.effacer_formulaire()
@@ -263,19 +359,87 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
                 QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {str(e)}")
 
     def rechercher_etudiant(self):
+        """Recherche un étudiant par matricule dans la base de données et le fichier texte"""
         matricule = self.matricule_search.text().strip()
         if not matricule:
             self.charger_etudiants()
+            self.statusBar().showMessage("Veuillez entrer un matricule pour la recherche", 3000)
             return
 
-        etudiant = self.db.rechercher_etudiant(matricule)
-        self.table_etudiants.setRowCount(0)
+        try:
+            # Recherche dans la base de données
+            etudiant = self.db.rechercher_etudiant(matricule)
+            
+            # Vider la table
+            self.table_etudiants.setRowCount(0)
+            
+            if etudiant:
+                # Afficher l'étudiant trouvé
+                self.table_etudiants.setRowCount(1)
+                self.afficher_etudiant(0, etudiant)
+                
+                # Remplir le formulaire avec les informations de l'étudiant
+                self.remplir_formulaire_recherche(etudiant)
+                
+                # Message de succès
+                self.statusBar().showMessage(f"Étudiant trouvé : {etudiant.nom} {etudiant.prenom}", 3000)
+                
+                # Sauvegarder la recherche dans un fichier texte
+                self.sauvegarder_recherche(etudiant)
+            else:
+                QMessageBox.information(self, "Information", "Aucun étudiant trouvé avec ce matricule")
+                self.statusBar().showMessage("Aucun étudiant trouvé", 3000)
+                self.effacer_formulaire()
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de la recherche : {str(e)}")
+            self.statusBar().showMessage("Erreur lors de la recherche", 3000)
+
+    def remplir_formulaire_recherche(self, etudiant):
+        """Remplit le formulaire avec les informations de l'étudiant trouvé"""
+        self.current_matricule = etudiant.matricule
+        self.nom_input.setText(etudiant.nom)
+        self.prenom_input.setText(etudiant.prenom)
         
-        if etudiant:
-            self.table_etudiants.setRowCount(1)
-            self.afficher_etudiant(0, etudiant)
-        else:
-            QMessageBox.information(self, "Information", "Aucun étudiant trouvé")
+        # Configuration de la date
+        date = QDate.fromString(etudiant.date_naissance, "yyyy-MM-dd")
+        self.date_naissance_input.setDate(date)
+        
+        # Configuration du sexe
+        self.radio_f.setChecked(etudiant.sexe == 'F')
+        self.radio_h.setChecked(etudiant.sexe == 'H')
+        
+        # Configuration du niveau et de la filière
+        niveau_index = self.niveau_combo.findText(etudiant.niveau)
+        if niveau_index >= 0:
+            self.niveau_combo.setCurrentIndex(niveau_index)
+            
+        filiere_index = self.filiere_combo.findText(etudiant.filiere)
+        if filiere_index >= 0:
+            self.filiere_combo.setCurrentIndex(filiere_index)
+            
+        # Activer les boutons de modification et suppression
+        self.btn_modifier.setEnabled(True)
+        self.btn_supprimer.setEnabled(True)
+
+    def sauvegarder_recherche(self, etudiant):
+        """Sauvegarde le résultat de la recherche dans un fichier texte"""
+        try:
+            nom_fichier = f"recherche_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            with open(nom_fichier, 'w', encoding='utf-8') as f:
+                f.write("=== Résultat de la recherche ===\n\n")
+                f.write(f"Matricule: {etudiant.matricule}\n")
+                f.write(f"Nom: {etudiant.nom}\n")
+                f.write(f"Prénom: {etudiant.prenom}\n")
+                f.write(f"Date de naissance: {etudiant.date_naissance}\n")
+                f.write(f"Sexe: {etudiant.sexe}\n")
+                f.write(f"Filière: {etudiant.filiere}\n")
+                f.write(f"Niveau: {etudiant.niveau}\n")
+                f.write("\n=== Fin de la recherche ===")
+            
+            print(f"Résultat de la recherche sauvegardé dans {nom_fichier}")
+        except Exception as e:
+            print(f"Erreur lors de la sauvegarde de la recherche: {str(e)}")
 
     def charger_etudiants(self):
         """Charge tous les étudiants sans filtre"""
