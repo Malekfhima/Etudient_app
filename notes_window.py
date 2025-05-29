@@ -17,6 +17,15 @@ class NotesWindow(QMainWindow):
         self.current_trimestre = 1
         self.statusBar()  # Créer la barre de statut
 
+    def set_matricule(self, matricule):
+        """Définit le matricule de l'étudiant sélectionné"""
+        if matricule:
+            etudiant = self.db.rechercher_etudiant(matricule)
+            if etudiant:
+                self.selected_etudiant = etudiant
+                self.etudiant_label.setText(f"{etudiant.nom} {etudiant.prenom} ({etudiant.matricule})")
+                self.afficher_notes(etudiant)
+
     def setup_ui(self):
         self.setWindowTitle("Gestion des Notes")
         self.setMinimumSize(1200, 700)
@@ -456,7 +465,7 @@ class NotesWindow(QMainWindow):
             tous_etudiants = self.db.get_all_etudiants()
             etudiants_filtres = [
                 etudiant for etudiant in tous_etudiants
-                if etudiant.niveau == niveau and etudiant.filiere == filiere
+                if etudiant.niveau == niveau and Etudiant.FILIERES == filiere
             ]
             
             # Mettre à jour le tableau
@@ -548,4 +557,4 @@ class NotesWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Ne pas fermer la base de données ici
-        super().closeEvent(event) 
+        super().closeEvent(event)

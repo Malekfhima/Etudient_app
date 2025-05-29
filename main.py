@@ -26,6 +26,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         # Configuration des placeholders
         self.nom_input.setPlaceholderText("Entrez le nom...")
         self.prenom_input.setPlaceholderText("Entrez le prénom...")
+        self.matricule_search.setPlaceholderText("Rechercher par matricule, nom ou prénom...")
         
         # Configuration des en-têtes du tableau
         self.table_etudiants.setHorizontalHeaderLabels([
@@ -39,7 +40,13 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         ])
         # Ajuster la taille des colonnes
         self.table_etudiants.horizontalHeader().setStretchLastSection(True)
-        self.table_etudiants.horizontalHeader().setVisible(True)
+        self.table_etudiants.setColumnWidth(0, 120)  # Matricule
+        self.table_etudiants.setColumnWidth(1, 150)  # Nom
+        self.table_etudiants.setColumnWidth(2, 150)  # Prénom
+        self.table_etudiants.setColumnWidth(3, 120)  # Date de naissance
+        self.table_etudiants.setColumnWidth(4, 60)   # Sexe
+        self.table_etudiants.setColumnWidth(5, 150)  # Filière
+        self.table_etudiants.setColumnWidth(6, 100)  # Niveau
         
         # Configuration de la date
         self.date_naissance_input.setDisplayFormat("dd/MM/yyyy")
@@ -50,9 +57,12 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.niveau_combo.clear()
         self.niveau_combo.addItems(Etudiant.NIVEAUX)
         
-        # Configuration initiale de la filière pour la 1ère année (Tronc Commun)
+        # Définir "1ère année" comme sélection par défaut
+        self.niveau_combo.setCurrentText("1ère année")
+        
+        # Configuration initiale de la filière - seulement "Tronc Commun" pour la 1ère année
         self.filiere_combo.clear()
-        self.niveau_change(self.niveau_combo.currentText())  # Mettre à jour les filières selon le niveau initial
+        self.filiere_combo.addItem("Tronc Commun")
         
         # Configuration initiale des boutons
         self.btn_modifier.setEnabled(False)
@@ -72,7 +82,11 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             QPushButton:hover {
                 background-color: #45a049;
             }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
         """)
+        self.btn_notes.setEnabled(False)
         self.buttons_layout.addWidget(self.btn_notes)
 
     def setup_connections(self):
@@ -96,10 +110,15 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         """Met à jour les filières disponibles en fonction du niveau sélectionné"""
         try:
             self.filiere_combo.clear()
-            if niveau in Etudiant.FILIERES:
+            
+            if niveau == "1ère année":
+                # Pour la 1ère année, seule la filière "Tronc Commun" est disponible
+                self.filiere_combo.addItem("Tronc Commun")
+            elif niveau in Etudiant.FILIERES:
+                # Pour les autres niveaux, afficher les filières correspondantes
                 filieres = Etudiant.FILIERES[niveau]
                 self.filiere_combo.addItems(filieres)
-                print(f"Filières ajoutées pour {niveau}: {filieres}")  # Debug
+                
             self.filtrer_etudiants()
         except Exception as e:
             print(f"Erreur dans niveau_change: {str(e)}")  # Debug
@@ -153,13 +172,16 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
     def selection_changed(self):
         selected = self.table_etudiants.selectedItems()
         if selected:
-            self.remplir_formulaire(selected[0].row())
+            row = selected[0].row()
+            self.remplir_formulaire(row)
             self.btn_modifier.setEnabled(True)
             self.btn_supprimer.setEnabled(True)
+            self.btn_notes.setEnabled(True)
         else:
             self.effacer_formulaire()
             self.btn_modifier.setEnabled(False)
             self.btn_supprimer.setEnabled(False)
+            self.btn_notes.setEnabled(False)
 
     def remplir_formulaire(self, row):
         self.current_matricule = self.table_etudiants.item(row, 0).text()
@@ -309,8 +331,15 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         if not self.valider_formulaire():
             return
 
-        etudiant = Etudiant(
-            matricule=self.current_matricule,
+        # Récupérer l'étudiant actuel avant modification
+        ancien_etudiant = self.db.rechercher_etudiant(self.current_matricule)
+        if not ancien_etudiant:
+            QMessageBox.warning(self, "Erreur", "Étudiant introuvable")
+            return
+
+        # Créer l'objet étudiant modifié
+        nouvel_etudiant = Etudiant(
+            matricule=self.current_matricule,  # Le matricule ne peut pas être modifié
             nom=self.nom_input.text().strip(),
             prenom=self.prenom_input.text().strip(),
             date_naissance=self.date_naissance_input.date().toString("yyyy-MM-dd"),
@@ -320,7 +349,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         )
 
         try:
-            if self.db.modifier_etudiant(etudiant):
+            if self.db.modifier_etudiant(nouvel_etudiant):
                 # Mettre à jour le fichier texte
                 self.mettre_a_jour_fichier_txt()
                 
@@ -346,6 +375,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
 
         if reponse == QMessageBox.Yes:
             try:
+                # Supprimer l'étudiant
                 if self.db.supprimer_etudiant(self.current_matricule):
                     # Mettre à jour le fichier texte
                     self.mettre_a_jour_fichier_txt()
@@ -359,87 +389,45 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
                 QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {str(e)}")
 
     def rechercher_etudiant(self):
-        """Recherche un étudiant par matricule dans la base de données et le fichier texte"""
-        matricule = self.matricule_search.text().strip()
-        if not matricule:
-            self.charger_etudiants()
-            self.statusBar().showMessage("Veuillez entrer un matricule pour la recherche", 3000)
+        """Recherche un étudiant par matricule, nom ou prénom"""
+        terme = self.matricule_search.text().strip()
+        if not terme:
+            self.filtrer_etudiants()  # Revenir au filtre normal
+            self.statusBar().showMessage("Veuillez entrer un terme de recherche", 3000)
             return
 
         try:
             # Recherche dans la base de données
-            etudiant = self.db.rechercher_etudiant(matricule)
+            etudiants_trouves = self.db.rechercher_etudiant_avancee(terme)
+            
+            # Si la recherche avancée n'existe pas, utiliser la recherche par matricule
+            if etudiants_trouves is None:
+                etudiant = self.db.rechercher_etudiant(terme)
+                etudiants_trouves = [etudiant] if etudiant else []
             
             # Vider la table
             self.table_etudiants.setRowCount(0)
             
-            if etudiant:
-                # Afficher l'étudiant trouvé
-                self.table_etudiants.setRowCount(1)
-                self.afficher_etudiant(0, etudiant)
+            if etudiants_trouves:
+                # Afficher les étudiants trouvés
+                self.table_etudiants.setRowCount(len(etudiants_trouves))
+                for row, etudiant in enumerate(etudiants_trouves):
+                    self.afficher_etudiant(row, etudiant)
                 
-                # Remplir le formulaire avec les informations de l'étudiant
-                self.remplir_formulaire_recherche(etudiant)
+                # Si un seul étudiant trouvé, remplir le formulaire
+                if len(etudiants_trouves) == 1:
+                    self.remplir_formulaire(0)
                 
                 # Message de succès
-                self.statusBar().showMessage(f"Étudiant trouvé : {etudiant.nom} {etudiant.prenom}", 3000)
-                
-                # Sauvegarder la recherche dans un fichier texte
-                self.sauvegarder_recherche(etudiant)
+                self.statusBar().showMessage(f"{len(etudiants_trouves)} étudiant(s) trouvé(s) pour '{terme}'", 3000)
             else:
-                QMessageBox.information(self, "Information", "Aucun étudiant trouvé avec ce matricule")
+                QMessageBox.information(self, "Information", "Aucun étudiant trouvé")
                 self.statusBar().showMessage("Aucun étudiant trouvé", 3000)
                 self.effacer_formulaire()
                 
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur lors de la recherche : {str(e)}")
             self.statusBar().showMessage("Erreur lors de la recherche", 3000)
-
-    def remplir_formulaire_recherche(self, etudiant):
-        """Remplit le formulaire avec les informations de l'étudiant trouvé"""
-        self.current_matricule = etudiant.matricule
-        self.nom_input.setText(etudiant.nom)
-        self.prenom_input.setText(etudiant.prenom)
-        
-        # Configuration de la date
-        date = QDate.fromString(etudiant.date_naissance, "yyyy-MM-dd")
-        self.date_naissance_input.setDate(date)
-        
-        # Configuration du sexe
-        self.radio_f.setChecked(etudiant.sexe == 'F')
-        self.radio_h.setChecked(etudiant.sexe == 'H')
-        
-        # Configuration du niveau et de la filière
-        niveau_index = self.niveau_combo.findText(etudiant.niveau)
-        if niveau_index >= 0:
-            self.niveau_combo.setCurrentIndex(niveau_index)
-            
-        filiere_index = self.filiere_combo.findText(etudiant.filiere)
-        if filiere_index >= 0:
-            self.filiere_combo.setCurrentIndex(filiere_index)
-            
-        # Activer les boutons de modification et suppression
-        self.btn_modifier.setEnabled(True)
-        self.btn_supprimer.setEnabled(True)
-
-    def sauvegarder_recherche(self, etudiant):
-        """Sauvegarde le résultat de la recherche dans un fichier texte"""
-        try:
-            nom_fichier = f"recherche_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            with open(nom_fichier, 'w', encoding='utf-8') as f:
-                f.write("=== Résultat de la recherche ===\n\n")
-                f.write(f"Matricule: {etudiant.matricule}\n")
-                f.write(f"Nom: {etudiant.nom}\n")
-                f.write(f"Prénom: {etudiant.prenom}\n")
-                f.write(f"Date de naissance: {etudiant.date_naissance}\n")
-                f.write(f"Sexe: {etudiant.sexe}\n")
-                f.write(f"Filière: {etudiant.filiere}\n")
-                f.write(f"Niveau: {etudiant.niveau}\n")
-                f.write("\n=== Fin de la recherche ===")
-            
-            print(f"Résultat de la recherche sauvegardé dans {nom_fichier}")
-        except Exception as e:
-            print(f"Erreur lors de la sauvegarde de la recherche: {str(e)}")
 
     def charger_etudiants(self):
         """Charge tous les étudiants sans filtre"""
@@ -448,6 +436,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             self.table_etudiants.setRowCount(len(etudiants))
             for row, etudiant in enumerate(etudiants):
                 self.afficher_etudiant(row, etudiant)
+            self.statusBar().showMessage(f"{len(etudiants)} étudiant(s) chargé(s)", 3000)
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de charger les étudiants: {str(e)}")
 
@@ -476,15 +465,21 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.prenom_input.clear()
         self.date_naissance_input.setDate(QDate.currentDate())
         self.radio_f.setChecked(True)
-        self.filiere_combo.setCurrentIndex(0)
-        self.niveau_combo.setCurrentIndex(0)
+        # Réinitialiser à "1ère année" et "Tronc Commun"
+        self.niveau_combo.setCurrentText("1ère année")
+        self.filiere_combo.setCurrentText("Tronc Commun")
         self.btn_modifier.setEnabled(False)
         self.btn_supprimer.setEnabled(False)
+        self.btn_notes.setEnabled(False)
         self.table_etudiants.clearSelection()
 
     def ouvrir_gestion_notes(self):
-        if not self.notes_window:
-            self.notes_window = NotesWindow(self)
+        if not self.current_matricule:
+            QMessageBox.warning(self, "Erreur", "Aucun étudiant sélectionné")
+            return
+            
+        # Créer une nouvelle instance de NotesWindow avec le matricule et le parent
+        self.notes_window = NotesWindow(matricule=self.current_matricule, parent=self)
         self.notes_window.show()
         self.notes_window.raise_()
         self.notes_window.activateWindow()
