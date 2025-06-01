@@ -1,6 +1,0 @@
-ETU250529212043|malek|fhima|2025-05-29|H|Tronc Commun|1ère année
-ETU250529213708|malek|fhima|2025-05-29|H|Tronc Commun|1ère année
-ETU250529213850|malek|fhima|2025-05-29|H|Tronc Commun|1ère année
-ETU250529214522|malek|fhima|2025-05-29|F|Tronc Commun|1ère année
-ETU250529214602|malek|fhima|2025-05-29|H|Tronc Commun|1ère année
-ETU250529220102|malek|fhima|2025-05-29|H|Tronc Commun|1ère année
