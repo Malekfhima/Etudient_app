@@ -1,12 +1,13 @@
 import sys
 import os
 from datetime import datetime
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QTableWidgetItem, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QTableWidgetItem, QPushButton, QDialog
 from PyQt5.QtCore import QDate, Qt
 from ui_main_window import Ui_MainWindow
 from database import Database
 from models import Etudiant
 from notes_window import NotesWindow
+from modifier_etudiant_window import ModifierEtudiantWindow
 
 class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -87,7 +88,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
                 background-color: #cccccc;
             }
         """)
-        self.btn_notes.setEnabled(False)
+        self.btn_notes.setEnabled(True)  # Toujours actif
         self.buttons_layout.addWidget(self.btn_notes)
 
     def setup_connections(self):
@@ -170,7 +171,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             self.remplir_formulaire(row)
             self.btn_modifier.setEnabled(True)
             self.btn_supprimer.setEnabled(True)
-            self.btn_notes.setEnabled(True)
+            self.btn_notes.setEnabled(True)  # Toujours actif
         else:
             self.effacer_formulaire()
             self.btn_modifier.setEnabled(False)
@@ -317,42 +318,30 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(self, "Avertissement", "Impossible de mettre à jour le fichier texte")
 
     def modifier_etudiant(self):
-        if not self.current_matricule:
-            QMessageBox.warning(self, "Avertissement", "Veuillez sélectionner un étudiant")
+        matricule = self.current_matricule
+        etudiant = self.get_etudiant_by_matricule(matricule)
+        if not etudiant:
+            QMessageBox.warning(self, "Erreur", "Étudiant introuvable dans le fichier.")
             return
-            
-        if not self.valider_formulaire():
-            return
-
-        # Récupérer l'étudiant actuel avant modification
-        ancien_etudiant = self.db.rechercher_etudiant(self.current_matricule)
-        if not ancien_etudiant:
-            QMessageBox.warning(self, "Erreur", "Étudiant introuvable")
-            return
-
-        # Créer l'objet étudiant modifié
-        nouvel_etudiant = Etudiant(
-            matricule=self.current_matricule,  # Le matricule ne peut pas être modifié
-            nom=self.nom_input.text().strip(),
-            prenom=self.prenom_input.text().strip(),
-            date_naissance=self.date_naissance_input.date().toString("yyyy-MM-dd"),
-            sexe=self.get_sexe(),
-            filiere=self.filiere_combo.currentText(),
-            niveau=self.niveau_combo.currentText()
-        )
-
-        try:
+        dialog = ModifierEtudiantWindow(etudiant, self)
+        if dialog.exec_() == QDialog.Accepted:
+            donnees = dialog.get_donnees()
+            nouvel_etudiant = Etudiant(
+                matricule=etudiant.matricule,
+                nom=donnees["nom"],
+                prenom=donnees["prenom"],
+                date_naissance=donnees["date_naissance"],
+                sexe=donnees["sexe"],
+                filiere=donnees["filiere"],
+                niveau=donnees["niveau"]
+            )
             if self.db.modifier_etudiant(nouvel_etudiant):
-                # Mettre à jour le fichier texte
                 self.mettre_a_jour_fichier_txt()
-                
                 QMessageBox.information(self, "Succès", "Étudiant modifié avec succès!")
                 self.charger_etudiants()
                 self.effacer_formulaire()
             else:
                 QMessageBox.critical(self, "Erreur", "Impossible de modifier l'étudiant")
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {str(e)}")
 
     def supprimer_etudiant(self):
         if not self.current_matricule:
@@ -471,19 +460,15 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.prenom_input.clear()
         self.date_naissance_input.setDate(QDate.currentDate())
         self.radio_f.setChecked(True)
-        # Réinitialiser à "1ère année" et "Tronc Commun"
         self.niveau_combo.setCurrentText("1ère année")
         self.filiere_combo.setCurrentText("Tronc Commun")
         self.btn_modifier.setEnabled(False)
         self.btn_supprimer.setEnabled(False)
-        self.btn_notes.setEnabled(False)
+        # NE PAS désactiver le bouton gestion des notes
+        # self.btn_notes.setEnabled(False)
         self.table_etudiants.clearSelection()
 
     def ouvrir_gestion_notes(self):
-        if not self.current_matricule:
-            QMessageBox.warning(self, "Erreur", "Aucun étudiant sélectionné")
-            return
-
         niveau = self.niveau_combo.currentText()
         filiere = self.filiere_combo.currentText()
         self.notes_window = NotesWindow(
@@ -503,6 +488,31 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         if self.notes_window:
             self.notes_window.close()
         super().closeEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.charger_etudiants_txt()
+
+    def get_etudiant_by_matricule(self, matricule):
+        """Recherche un étudiant dans etudiants.txt par son matricule"""
+        if not matricule:
+            return None
+        if not os.path.exists('etudiants.txt'):
+            return None
+        with open('etudiants.txt', 'r', encoding='utf-8') as f:
+            for ligne in f:
+                donnees = ligne.strip().split('|')
+                if len(donnees) == 7 and donnees[0] == matricule:
+                    return Etudiant(
+                        matricule=donnees[0],
+                        nom=donnees[1],
+                        prenom=donnees[2],
+                        date_naissance=donnees[3],
+                        sexe=donnees[4],
+                        filiere=donnees[5],
+                        niveau=donnees[6]
+                    )
+        return None
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

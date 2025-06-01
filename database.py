@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from models import Etudiant, Matiere, Note, ResultatEtudiant
+import os
 
 class DatabaseError(Exception):
     """Classe d'exception personnalisée pour les erreurs de base de données"""
@@ -332,40 +333,36 @@ class Database:
             raise DatabaseError(f"Erreur lors de la suppression de l'étudiant: {str(e)}")
 
     def modifier_etudiant(self, etudiant):
-        if not etudiant.matricule:
-            raise DatabaseError("Le matricule ne peut pas être vide")
-
-        if not self.valider_date(etudiant.date_naissance):
-            raise DatabaseError("La date de naissance n'est pas valide")
-
-        query = """
-        UPDATE etudiants SET
-            nom = ?,
-            prenom = ?,
-            date_naissance = ?,
-            sexe = ?,
-            filiere = ?,
-            niveau = ?
-        WHERE matricule = ?
-        """
-        try:
-            with self.conn:
-                cursor = self.conn.execute(query, (
-                    etudiant.nom.strip(),
-                    etudiant.prenom.strip(),
-                    etudiant.date_naissance,
-                    etudiant.sexe,
-                    etudiant.filiere,
-                    etudiant.niveau,
-                    etudiant.matricule
-                ))
-                if cursor.rowcount == 0:
-                    return False
-                return True
-        except sqlite3.IntegrityError:
-            raise DatabaseError("Les données ne respectent pas les contraintes de validation")
-        except sqlite3.Error as e:
-            raise DatabaseError(f"Erreur lors de la modification de l'étudiant: {str(e)}")
+        """Modifie un étudiant dans etudiants.txt selon son matricule"""
+        if not etudiant or not etudiant.matricule:
+            return False
+        if not os.path.exists('etudiants.txt'):
+            return False
+        lignes = []
+        trouve = False
+        with open('etudiants.txt', 'r', encoding='utf-8') as f:
+            for ligne in f:
+                donnees = ligne.strip().split('|')
+                if len(donnees) == 7 and donnees[0] == etudiant.matricule:
+                    # Remplacer la ligne par les nouvelles données
+                    lignes.append('|'.join([
+                        etudiant.matricule,
+                        etudiant.nom,
+                        etudiant.prenom,
+                        etudiant.date_naissance,
+                        etudiant.sexe,
+                        etudiant.filiere,
+                        etudiant.niveau
+                    ]))
+                    trouve = True
+                else:
+                    lignes.append(ligne.strip())
+        if not trouve:
+            return False
+        with open('etudiants.txt', 'w', encoding='utf-8') as f:
+            for l in lignes:
+                f.write(l + '\n')
+        return True
 
     def rechercher_etudiant(self, matricule):
         if not matricule:

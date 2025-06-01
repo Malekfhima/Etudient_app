@@ -105,21 +105,6 @@ class NotesWindow(QMainWindow):
         # Boutons d'action
         buttons_group = QHBoxLayout()
         
-        # Bouton Afficher
-        self.btn_afficher = QPushButton("Afficher")
-        self.btn_afficher.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                padding: 8px 15px;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 100px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-        """)
         
         # Bouton Rafraîchir
         self.btn_refresh = QPushButton("Rafraîchir")
@@ -137,7 +122,6 @@ class NotesWindow(QMainWindow):
             }
         """)
         
-        buttons_group.addWidget(self.btn_afficher)
         buttons_group.addWidget(self.btn_refresh)
         filter_layout.addLayout(buttons_group)
         
@@ -145,11 +129,11 @@ class NotesWindow(QMainWindow):
         
         # Table des étudiants
         self.table_etudiants = QTableWidget()
-        self.table_etudiants.setColumnCount(11)
+        self.table_etudiants.setColumnCount(12)
         self.table_etudiants.setHorizontalHeaderLabels([
             "Matricule", "Nom", "Prénom", "Date de naissance", "Sexe",
             "Moyenne T1", "Moyenne T2", "Moyenne T3",
-            "Moyenne Générale", "Mention", "Action"
+            "Moyenne Générale", "Mention", "Décision", "Action"
         ])
         self.table_etudiants.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_etudiants.setSelectionBehavior(QTableWidget.SelectRows)
@@ -222,7 +206,6 @@ class NotesWindow(QMainWindow):
         self.btn_refresh.clicked.connect(self.rafraichir_liste)
         self.btn_calculer.clicked.connect(self.calculer_moyennes)
         self.btn_enregistrer.clicked.connect(self.enregistrer_notes)
-        # self.btn_afficher.clicked.connect(self.afficher_etudiants)
         self.table_etudiants.itemSelectionChanged.connect(self.on_etudiant_selected)
 
     def rafraichir_liste(self):
@@ -299,6 +282,12 @@ class NotesWindow(QMainWindow):
                 if all(trim in moyennes_trim for trim in [1, 2, 3]):
                     moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
                 mention = ResultatEtudiant.calculer_mention(moyenne_generale)
+                # --- MODIFIE ICI ---
+                if self.niveau_combo.currentText().lower() == "bac" and 7.0 <= moyenne_generale < 10.0:
+                    decision = "Contrôle"
+                else:
+                    decision = "Admis" if moyenne_generale >= 10 else "Refusé"
+                # --- FIN MODIF ---
 
                 self.table_etudiants.insertRow(row)
                 self.table_etudiants.setItem(row, 0, QTableWidgetItem(etudiant["matricule"]))
@@ -311,6 +300,7 @@ class NotesWindow(QMainWindow):
                 self.table_etudiants.setItem(row, 7, QTableWidgetItem(f"{moyennes_trim[3]:.2f}"))
                 self.table_etudiants.setItem(row, 8, QTableWidgetItem(f"{moyenne_generale:.2f}"))
                 self.table_etudiants.setItem(row, 9, QTableWidgetItem(mention))
+                self.table_etudiants.setItem(row, 10, QTableWidgetItem(decision))
 
                 # Créer le bouton "Gérer les notes"
                 btn_notes = QPushButton("Gérer les notes")
@@ -326,7 +316,6 @@ class NotesWindow(QMainWindow):
                         background-color: #1976D2;
                     }
                 """)
-                # Connecter le bouton à la fonction afficher_notes pour cet étudiant
                 btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(
                     Etudiant(
                         matricule=e["matricule"],
@@ -338,7 +327,7 @@ class NotesWindow(QMainWindow):
                         niveau=self.niveau_combo.currentText()
                     )
                 ))
-                self.table_etudiants.setCellWidget(row, 10, btn_notes)
+                self.table_etudiants.setCellWidget(row, 11, btn_notes)  # <-- colonne 11 = "Action"
             
             self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}", 3000)
         except Exception as e:
@@ -376,40 +365,47 @@ class NotesWindow(QMainWindow):
     def afficher_notes(self, etudiant):
         self.selected_etudiant = etudiant
         self.etudiant_label.setText(f"{etudiant.nom} {etudiant.prenom} ({etudiant.matricule})")
-        
         try:
             # Récupérer les matières pour ce niveau et cette filière
             self.matieres = self.db.get_matieres(etudiant.niveau, etudiant.filiere)
+            self.table_notes.setRowCount(len(self.matieres))
+            # Charger les notes existantes pour cet étudiant et ce trimestre
+            notes_existantes = {}
+            nom_fichier = f"notes_{etudiant.niveau}_{etudiant.filiere}.txt"
+            trimestre = self.trimestre_combo.currentIndex() + 1
+            if os.path.exists(nom_fichier):
+                with open(nom_fichier, "r", encoding="utf-8") as f:
+                    for ligne in f:
+                        parts = ligne.strip().split("|")
+                        if len(parts) == 5:
+                            m, matiere, note_cc, note_exam, trim = parts
+                            if m == etudiant.matricule and int(trim) == trimestre:
+                                notes_existantes[matiere] = (float(note_cc), float(note_exam))
             
             # Remplir la table des notes
-            self.table_notes.setRowCount(len(self.matieres))
-            
             for row, matiere in enumerate(self.matieres):
-                # Matière et coefficient
                 self.table_notes.setItem(row, 0, QTableWidgetItem(matiere.nom))
                 self.table_notes.setItem(row, 1, QTableWidgetItem(str(matiere.coefficient)))
-                
                 # Note CC (input)
                 note_cc = QDoubleSpinBox()
                 note_cc.setRange(0, 20)
                 note_cc.setDecimals(2)
-                self.table_notes.setCellWidget(row, 2, note_cc)
-                
                 # Note Examen (input)
                 note_exam = QDoubleSpinBox()
                 note_exam.setRange(0, 20)
                 note_exam.setDecimals(2)
+                # Pré-remplir si note existante
+                if matiere.nom in notes_existantes:
+                    note_cc.setValue(notes_existantes[matiere.nom][0])
+                    note_exam.setValue(notes_existantes[matiere.nom][1])
+                self.table_notes.setCellWidget(row, 2, note_cc)
                 self.table_notes.setCellWidget(row, 3, note_exam)
-                
-                # Moyenne (vide au départ)
                 self.table_notes.setItem(row, 4, QTableWidgetItem(""))
-                
                 # Rendre les cellules non éditables sauf les inputs
                 for col in [0, 1, 4]:
                     item = self.table_notes.item(row, col)
                     if item:
                         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                        
         except Exception as e:
             QMessageBox.critical(self, "Erreur", str(e))
 
@@ -480,7 +476,7 @@ class NotesWindow(QMainWindow):
             tous_etudiants = self.db.get_all_etudiants()
             etudiants_filtres = [
                 etudiant for etudiant in tous_etudiants
-                if etudiant.niveau == niveau and Etudiant.FILIERES == filiere
+                if etudiant.niveau == niveau and etudiant.filiere == filiere
             ]
             
             # Mettre à jour le tableau
@@ -503,6 +499,8 @@ class NotesWindow(QMainWindow):
                     QTableWidgetItem(etudiant.matricule),
                     QTableWidgetItem(etudiant.nom),
                     QTableWidgetItem(etudiant.prenom),
+                    QTableWidgetItem(etudiant.date_naissance),
+                    QTableWidgetItem(etudiant.sexe),
                     QTableWidgetItem(f"{moyennes_trim.get(1, 0.0):.2f}"),
                     QTableWidgetItem(f"{moyennes_trim.get(2, 0.0):.2f}"),
                     QTableWidgetItem(f"{moyennes_trim.get(3, 0.0):.2f}"),
@@ -529,18 +527,8 @@ class NotesWindow(QMainWindow):
                         background-color: #1976D2;
                     }
                 """)
-                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(
-                    Etudiant(
-                        matricule=e["matricule"],
-                        nom=e["nom"],
-                        prenom=e["prenom"],
-                        date_naissance=e["date_naissance"],
-                        sexe=e["sexe"],
-                        filiere=self.filiere_combo.currentText(),
-                        niveau=self.niveau_combo.currentText()
-                    )
-                ))
-                self.table_etudiants.setCellWidget(row, 8, btn_notes)
+                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(e))
+                self.table_etudiants.setCellWidget(row, 10, btn_notes)
             
             # Afficher un message de statut
             message = f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}"
