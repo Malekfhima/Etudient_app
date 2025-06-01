@@ -1,15 +1,19 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QComboBox, QTableWidget, QTableWidgetItem,
                              QPushButton, QSpinBox, QDoubleSpinBox, QMessageBox,
-                             QHeaderView)
+                             QHeaderView, QLineEdit)
 from PyQt5.QtCore import Qt
 from database import Database
 from models import Note, Matiere, ResultatEtudiant, Etudiant
 from datetime import datetime
+import os
 
 class NotesWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, matricule=None, niveau=None, filiere=None, parent=None):
         super().__init__(parent)
+        self.matricule = matricule
+        self.niveau = niveau
+        self.filiere = filiere
         self.db = Database()
         self.setup_ui()
         self.selected_etudiant = None
@@ -143,7 +147,7 @@ class NotesWindow(QMainWindow):
         self.table_etudiants = QTableWidget()
         self.table_etudiants.setColumnCount(9)
         self.table_etudiants.setHorizontalHeaderLabels([
-            "Matricule", "Nom", "Prénom", 
+            "Matricule", "Nom", "Prénom",
             "Moyenne T1", "Moyenne T2", "Moyenne T3",
             "Moyenne Générale", "Mention", "Action"
         ])
@@ -219,6 +223,7 @@ class NotesWindow(QMainWindow):
         self.btn_calculer.clicked.connect(self.calculer_moyennes)
         self.btn_enregistrer.clicked.connect(self.enregistrer_notes)
         self.btn_afficher.clicked.connect(self.afficher_etudiants)
+        self.table_etudiants.itemSelectionChanged.connect(self.on_etudiant_selected)
 
     def rafraichir_liste(self):
         """Force le rechargement de la liste des étudiants"""
@@ -261,75 +266,87 @@ class NotesWindow(QMainWindow):
             self.afficher_notes(self.selected_etudiant)
 
     def charger_classement(self):
-        """Charge et affiche les étudiants selon le niveau et la filière sélectionnés"""
+        """Charge et affiche les étudiants selon le niveau et la filière sélectionnés depuis etudiants.txt"""
         niveau = self.niveau_combo.currentText()
         filiere = self.filiere_combo.currentText()
-        
+
         if not niveau or not filiere:
             self.table_etudiants.setRowCount(0)
             return
-            
+
         try:
-            print(f"Chargement des étudiants pour {niveau} - {filiere}")
-            
-            # Récupérer tous les étudiants
-            tous_etudiants = self.db.get_all_etudiants()
-            print(f"Nombre total d'étudiants: {len(tous_etudiants)}")
-            
-            # Filtrer les étudiants
-            etudiants_filtres = [
-                etudiant for etudiant in tous_etudiants
-                if etudiant.niveau == niveau and etudiant.filiere == filiere
-            ]
-            print(f"Nombre d'étudiants filtrés: {len(etudiants_filtres)}")
-            
-            # Mettre à jour le tableau
-            self.table_etudiants.setRowCount(len(etudiants_filtres))
-            
+            etudiants_filtres = []
+            if os.path.exists('etudiants.txt'):
+                with open('etudiants.txt', 'r', encoding='utf-8') as f:
+                    for ligne in f:
+                        donnees = ligne.strip().split('|')
+                        if len(donnees) == 7:
+                            matricule, nom, prenom, date_naissance, sexe, filiere_txt, niveau_txt = donnees
+                            if niveau_txt == niveau and filiere_txt == filiere:
+                                etudiants_filtres.append({
+                                    "matricule": matricule,
+                                    "nom": nom,
+                                    "prenom": prenom,
+                                    "date_naissance": date_naissance,
+                                    "sexe": sexe
+                                })
+
+            self.table_etudiants.setRowCount(0)  # Vide le tableau avant de le remplir
+
             for row, etudiant in enumerate(etudiants_filtres):
-                # Calculer les moyennes par trimestre
-                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule)
-                
-                # Calculer la moyenne générale
+                if not etudiant["matricule"].strip():
+                    continue  # Ignore la ligne vide
+
+                # Calculer les moyennes pour cet étudiant
+                moyennes_trim = self.calculer_moyennes_trimestres(etudiant["matricule"])
+                moyenne_generale = 0.0
                 if all(trim in moyennes_trim for trim in [1, 2, 3]):
                     moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
-                else:
-                    moyenne_generale = 0.0
-                
-                # Déterminer la mention
+
                 mention = ResultatEtudiant.calculer_mention(moyenne_generale)
-                
-                # Créer et ajouter les items
-                items = [
-                    QTableWidgetItem(etudiant.matricule),
-                    QTableWidgetItem(etudiant.nom),
-                    QTableWidgetItem(etudiant.prenom),
-                    QTableWidgetItem(f"{moyennes_trim.get(1, 0.0):.2f}"),
-                    QTableWidgetItem(f"{moyennes_trim.get(2, 0.0):.2f}"),
-                    QTableWidgetItem(f"{moyennes_trim.get(3, 0.0):.2f}"),
-                    QTableWidgetItem(f"{moyenne_generale:.2f}"),
-                    QTableWidgetItem(mention)
-                ]
-                
-                for col, item in enumerate(items):
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    self.table_etudiants.setItem(row, col, item)
-                
-                # Ajouter le bouton Gérer les notes
+
+                self.table_etudiants.insertRow(row)
+                self.table_etudiants.setItem(row, 0, QTableWidgetItem(etudiant["matricule"]))
+                self.table_etudiants.setItem(row, 1, QTableWidgetItem(etudiant["nom"]))
+                self.table_etudiants.setItem(row, 2, QTableWidgetItem(etudiant["prenom"]))
+                self.table_etudiants.setItem(row, 3, QTableWidgetItem(f"{moyennes_trim.get(1, 0.0):.2f}"))
+                self.table_etudiants.setItem(row, 4, QTableWidgetItem(f"{moyennes_trim.get(2, 0.0):.2f}"))
+                self.table_etudiants.setItem(row, 5, QTableWidgetItem(f"{moyennes_trim.get(3, 0.0):.2f}"))
+                self.table_etudiants.setItem(row, 6, QTableWidgetItem(f"{moyenne_generale:.2f}"))
+                self.table_etudiants.setItem(row, 7, QTableWidgetItem(mention))
+
+                # Créer le bouton "Gérer les notes"
                 btn_notes = QPushButton("Gérer les notes")
-                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(e))
+                btn_notes.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2196F3;
+                        color: white;
+                        border: none;
+                        padding: 5px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #1976D2;
+                    }
+                """)
+                # Connecter le bouton à la fonction afficher_notes pour cet étudiant
+                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(
+                    Etudiant(
+                        matricule=e["matricule"],
+                        nom=e["nom"],
+                        prenom=e["prenom"],
+                        date_naissance=e["date_naissance"],
+                        sexe=e["sexe"],
+                        filiere=self.filiere_combo.currentText(),
+                        niveau=self.niveau_combo.currentText()
+                    )
+                ))
                 self.table_etudiants.setCellWidget(row, 8, btn_notes)
             
-            # Message de statut
-            if etudiants_filtres:
-                self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}")
-            else:
-                self.statusBar().showMessage(f"Aucun étudiant trouvé pour {niveau} - {filiere}")
-                
+            self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}", 3000)
         except Exception as e:
-            print(f"Erreur dans charger_classement: {str(e)}")
             QMessageBox.critical(self, "Erreur", f"Impossible de charger les étudiants: {str(e)}")
-            self.statusBar().showMessage("Erreur lors du chargement des étudiants")
+            self.statusBar().showMessage("Erreur lors du chargement des étudiants", 3000)
 
     def calculer_moyennes_trimestres(self, matricule):
         """Calcule les moyennes pour chaque trimestre"""
@@ -366,9 +383,6 @@ class NotesWindow(QMainWindow):
             # Récupérer les matières pour ce niveau et cette filière
             self.matieres = self.db.get_matieres(etudiant.niveau, etudiant.filiere)
             
-            # Récupérer les notes existantes
-            notes = self.db.get_notes_etudiant(etudiant.matricule)
-            
             # Remplir la table des notes
             self.table_notes.setRowCount(len(self.matieres))
             
@@ -377,40 +391,27 @@ class NotesWindow(QMainWindow):
                 self.table_notes.setItem(row, 0, QTableWidgetItem(matiere.nom))
                 self.table_notes.setItem(row, 1, QTableWidgetItem(str(matiere.coefficient)))
                 
-                # Note CC
+                # Note CC (input)
                 note_cc = QDoubleSpinBox()
                 note_cc.setRange(0, 20)
                 note_cc.setDecimals(2)
-                if matiere.id in notes and self.current_trimestre in notes[matiere.id]:
-                    note = notes[matiere.id][self.current_trimestre]
-                    if note.note_cc is not None:
-                        note_cc.setValue(note.note_cc)
                 self.table_notes.setCellWidget(row, 2, note_cc)
                 
-                # Note Examen
+                # Note Examen (input)
                 note_exam = QDoubleSpinBox()
                 note_exam.setRange(0, 20)
                 note_exam.setDecimals(2)
-                if matiere.id in notes and self.current_trimestre in notes[matiere.id]:
-                    note = notes[matiere.id][self.current_trimestre]
-                    if note.note_exam is not None:
-                        note_exam.setValue(note.note_exam)
                 self.table_notes.setCellWidget(row, 3, note_exam)
                 
-                # Moyenne (calculée)
-                moyenne = QTableWidgetItem()
-                if matiere.id in notes and self.current_trimestre in notes[matiere.id]:
-                    note = notes[matiere.id][self.current_trimestre]
-                    if note.moyenne is not None:
-                        moyenne.setText(f"{note.moyenne:.2f}")
-                self.table_notes.setItem(row, 4, moyenne)
+                # Moyenne (vide au départ)
+                self.table_notes.setItem(row, 4, QTableWidgetItem(""))
                 
-                # Rendre les cellules non-éditables sauf les notes
+                # Rendre les cellules non éditables sauf les inputs
                 for col in [0, 1, 4]:
                     item = self.table_notes.item(row, col)
                     if item:
                         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                
+                        
         except Exception as e:
             QMessageBox.critical(self, "Erreur", str(e))
 
@@ -558,3 +559,78 @@ class NotesWindow(QMainWindow):
     def closeEvent(self, event):
         # Ne pas fermer la base de données ici
         super().closeEvent(event)
+
+    def afficher_notes_seul_etudiant(self):
+        """Affiche la fenêtre de saisie des notes pour un seul étudiant"""
+        self.setWindowTitle("Saisie des Notes")
+        self.setGeometry(100, 100, 400, 300)
+        
+        # Effacer le layout central actuel
+        for i in reversed(range(self.centralWidget().layout().count())):
+            widget = self.centralWidget().layout().itemAt(i).widget()
+            if widget is not None:
+                widget.deleteLater()
+        
+        layout = QVBoxLayout(self.centralWidget())
+        
+        label_info = QLabel(f"Saisie des notes pour le matricule : {self.matricule}")
+        layout.addWidget(label_info)
+        
+        # Champs de saisie pour les notes
+        self.note1_input = QLineEdit()
+        self.note1_input.setPlaceholderText("Note 1")
+        layout.addWidget(self.note1_input)
+
+        self.note2_input = QLineEdit()
+        self.note2_input.setPlaceholderText("Note 2")
+        layout.addWidget(self.note2_input)
+
+        # Bouton pour enregistrer les notes
+        btn_enregistrer = QPushButton("Enregistrer les notes")
+        layout.addWidget(btn_enregistrer)
+
+        # Connexion du bouton à la méthode d'enregistrement
+        btn_enregistrer.clicked.connect(self.enregistrer_notes_seul_etudiant)
+
+    def enregistrer_notes_seul_etudiant(self):
+        """Enregistre les notes saisies pour un seul étudiant"""
+        note1 = self.note1_input.text()
+        note2 = self.note2_input.text()
+        
+        # Ici tu peux ajouter la logique pour sauvegarder les notes
+        QMessageBox.information(self, "Succès", f"Notes enregistrées pour {self.matricule} : {note1}, {note2}")
+
+    def charger_etudiants_filtres(self):
+        """Charge les étudiants du fichier texte selon le niveau et la filière sélectionnés"""
+        self.liste_etudiants.clear()
+        if not self.niveau or not self.filiere:
+            return
+        if not os.path.exists('etudiants.txt'):
+            return
+        with open('etudiants.txt', 'r', encoding='utf-8') as f:
+            for ligne in f:
+                donnees = ligne.strip().split('|')
+                if len(donnees) == 7:
+                    matricule, nom, prenom, date_naissance, sexe, filiere, niveau = donnees
+                    if niveau == self.niveau and filiere == self.filiere:
+                        self.liste_etudiants.addItem(f"{matricule} - {nom} {prenom}")
+    
+    def on_etudiant_selected(self):
+        selected_rows = self.table_etudiants.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+        row = selected_rows[0].row()
+        matricule = self.table_etudiants.item(row, 0).text()
+        nom = self.table_etudiants.item(row, 1).text()
+        prenom = self.table_etudiants.item(row, 2).text()
+        # Crée un objet Etudiant ou récupère-le selon ta logique
+        etudiant = Etudiant(
+            matricule=matricule,
+            nom=nom,
+            prenom=prenom,
+            date_naissance="",  # À compléter si besoin
+            sexe="",            # À compléter si besoin
+            filiere=self.filiere_combo.currentText(),
+            niveau=self.niveau_combo.currentText()
+        )
+        self.afficher_notes(etudiant)

@@ -29,6 +29,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.matricule_search.setPlaceholderText("Rechercher par matricule, nom ou prénom...")
         
         # Configuration des en-têtes du tableau
+        self.table_etudiants.setColumnCount(7)
         self.table_etudiants.setHorizontalHeaderLabels([
             "Matricule",
             "Nom",
@@ -107,21 +108,16 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         self.btn_notes.clicked.connect(self.ouvrir_gestion_notes)
 
     def niveau_change(self, niveau):
-        """Met à jour les filières disponibles en fonction du niveau sélectionné"""
         try:
             self.filiere_combo.clear()
-            
             if niveau == "1ère année":
-                # Pour la 1ère année, seule la filière "Tronc Commun" est disponible
                 self.filiere_combo.addItem("Tronc Commun")
             elif niveau in Etudiant.FILIERES:
-                # Pour les autres niveaux, afficher les filières correspondantes
-                filieres = Etudiant.FILIERES[niveau]
-                self.filiere_combo.addItems(filieres)
-                
+                self.filiere_combo.addItems(Etudiant.FILIERES[niveau])
+            self.filiere_combo.setCurrentIndex(0)
             self.filtrer_etudiants()
         except Exception as e:
-            print(f"Erreur dans niveau_change: {str(e)}")  # Debug
+            print(f"Erreur dans niveau_change: {str(e)}")
             QMessageBox.critical(self, "Erreur", f"Erreur lors du changement de niveau : {str(e)}")
 
     def filtrer_etudiants(self):
@@ -129,34 +125,32 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         niveau = self.niveau_combo.currentText()
         filiere = self.filiere_combo.currentText()
         
-        if not niveau or not filiere:  # Si aucun niveau ou filière n'est sélectionné
+        if not niveau or not filiere:
             self.table_etudiants.setRowCount(0)
+            self.table_etudiants.setHorizontalHeaderLabels([
+                "Matricule", "Nom", "Prénom", "Date de naissance", "Sexe", "Filière", "Niveau"
+            ])
             self.statusBar().showMessage("Veuillez sélectionner un niveau et une filière", 3000)
             return
-        
+
         try:
-            # Récupérer tous les étudiants
             tous_etudiants = self.db.get_all_etudiants()
-            
-            # Filtrer les étudiants selon le niveau et la filière
             etudiants_filtres = [
                 etudiant for etudiant in tous_etudiants
                 if etudiant.niveau == niveau and etudiant.filiere == filiere
             ]
-            
-            # Mettre à jour la table
             self.table_etudiants.setRowCount(len(etudiants_filtres))
+            self.table_etudiants.setHorizontalHeaderLabels([
+                "Matricule", "Nom", "Prénom", "Date de naissance", "Sexe", "Filière", "Niveau"
+            ])
             for row, etudiant in enumerate(etudiants_filtres):
                 self.afficher_etudiant(row, etudiant)
-                
-            # Afficher un message avec le nombre d'étudiants trouvés
             if etudiants_filtres:
                 self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}", 3000)
             else:
                 self.statusBar().showMessage(f"Aucun étudiant trouvé pour {niveau} - {filiere}", 3000)
-                
         except Exception as e:
-            print(f"Erreur dans filtrer_etudiants: {str(e)}")  # Debug
+            print(f"Erreur dans filtrer_etudiants: {str(e)}")
             QMessageBox.critical(self, "Erreur", f"Impossible de filtrer les étudiants: {str(e)}")
             self.statusBar().showMessage("Erreur lors du filtrage des étudiants", 3000)
 
@@ -232,8 +226,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
     def sauvegarder_etudiant_txt(self, etudiant):
         """Sauvegarde les informations d'un étudiant dans un fichier texte"""
         try:
-            with open('etudiants.txt', 'a', encoding='utf-8') as f:
-                # Format: matricule|nom|prenom|date_naissance|sexe|filiere|niveau
+            with open('etudiants.txt', 'a', encoding='utf-8') as f:  # mode append
                 ligne = f"{etudiant.matricule}|{etudiant.nom}|{etudiant.prenom}|{etudiant.date_naissance}|{etudiant.sexe}|{etudiant.filiere}|{etudiant.niveau}\n"
                 f.write(ligne)
             print(f"Étudiant sauvegardé dans etudiants.txt: {etudiant.nom} {etudiant.prenom}")
@@ -389,42 +382,55 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
                 QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {str(e)}")
 
     def rechercher_etudiant(self):
-        """Recherche un étudiant par matricule, nom ou prénom"""
+        """Recherche un étudiant par matricule, nom ou prénom dans le fichier texte"""
         terme = self.matricule_search.text().strip()
         if not terme:
-            self.filtrer_etudiants()  # Revenir au filtre normal
+            self.filtrer_etudiants()
             self.statusBar().showMessage("Veuillez entrer un terme de recherche", 3000)
             return
 
         try:
-            # Recherche dans la base de données
-            etudiants_trouves = self.db.rechercher_etudiant_avancee(terme)
-            
-            # Si la recherche avancée n'existe pas, utiliser la recherche par matricule
-            if etudiants_trouves is None:
-                etudiant = self.db.rechercher_etudiant(terme)
-                etudiants_trouves = [etudiant] if etudiant else []
-            
-            # Vider la table
+            if not os.path.exists('etudiants.txt'):
+                QMessageBox.information(self, "Information", "Aucun étudiant trouvé (fichier manquant)")
+                self.statusBar().showMessage("Aucun étudiant trouvé", 3000)
+                self.effacer_formulaire()
+                return
+
+            etudiants_trouves = []
+            with open('etudiants.txt', 'r', encoding='utf-8') as f:
+                for ligne in f:
+                    donnees = ligne.strip().split('|')
+                    if len(donnees) == 7:
+                        matricule, nom, prenom, date_naissance, sexe, filiere, niveau = donnees
+                        if (terme.lower() in matricule.lower() or
+                            terme.lower() in nom.lower() or
+                            terme.lower() in prenom.lower()):
+                            etudiant = Etudiant(
+                                matricule=matricule,
+                                nom=nom,
+                                prenom=prenom,
+                                date_naissance=date_naissance,
+                                sexe=sexe,
+                                filiere=filiere,
+                                niveau=niveau
+                            )
+                            etudiants_trouves.append(etudiant)
+
             self.table_etudiants.setRowCount(0)
-            
             if etudiants_trouves:
-                # Afficher les étudiants trouvés
                 self.table_etudiants.setRowCount(len(etudiants_trouves))
+                self.table_etudiants.setHorizontalHeaderLabels([
+                    "Matricule", "Nom", "Prénom", "Date de naissance", "Sexe", "Filière", "Niveau"
+                ])
                 for row, etudiant in enumerate(etudiants_trouves):
                     self.afficher_etudiant(row, etudiant)
-                
-                # Si un seul étudiant trouvé, remplir le formulaire
                 if len(etudiants_trouves) == 1:
                     self.remplir_formulaire(0)
-                
-                # Message de succès
                 self.statusBar().showMessage(f"{len(etudiants_trouves)} étudiant(s) trouvé(s) pour '{terme}'", 3000)
             else:
                 QMessageBox.information(self, "Information", "Aucun étudiant trouvé")
                 self.statusBar().showMessage("Aucun étudiant trouvé", 3000)
                 self.effacer_formulaire()
-                
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur lors de la recherche : {str(e)}")
             self.statusBar().showMessage("Erreur lors de la recherche", 3000)
@@ -477,9 +483,15 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
         if not self.current_matricule:
             QMessageBox.warning(self, "Erreur", "Aucun étudiant sélectionné")
             return
-            
-        # Créer une nouvelle instance de NotesWindow avec le matricule et le parent
-        self.notes_window = NotesWindow(matricule=self.current_matricule, parent=self)
+
+        niveau = self.niveau_combo.currentText()
+        filiere = self.filiere_combo.currentText()
+        self.notes_window = NotesWindow(
+            matricule=self.current_matricule,
+            niveau=niveau,
+            filiere=filiere,
+            parent=self
+        )
         self.notes_window.show()
         self.notes_window.raise_()
         self.notes_window.activateWindow()

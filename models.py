@@ -84,14 +84,13 @@ class Etudiant:
     filiere: str
     niveau: str
 
+    NIVEAUX = ["1ère année", "2ème année", "3ème année", "Bac"]
     FILIERES = {
-        'bac': ['Sciences Expérimentales', 'Mathématiques', 'Lettres', 'Économie et Gestion', 'Technique', 'Informatique'],
-        '1ère année': ['Tronc Commun'],
-        '2ème année': ['Sciences Expérimentales', 'Mathématiques', 'Lettres', 'Économie et Gestion', 'Technique', 'Informatique'],
-        '3ème année': ['Sciences Expérimentales', 'Mathématiques', 'Lettres', 'Économie et Gestion', 'Technique', 'Informatique']
+        "1ère année": ["Tronc Commun"],
+        "2ème année": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"],
+        "3ème année": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"],
+        "Bac": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"]
     }
-    
-    NIVEAUX = ['1ère année', '2ème année', '3ème année', 'Bac']
     
     def __post_init__(self):
         self.valider()
