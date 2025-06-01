@@ -145,9 +145,9 @@ class NotesWindow(QMainWindow):
         
         # Table des étudiants
         self.table_etudiants = QTableWidget()
-        self.table_etudiants.setColumnCount(9)
+        self.table_etudiants.setColumnCount(11)
         self.table_etudiants.setHorizontalHeaderLabels([
-            "Matricule", "Nom", "Prénom",
+            "Matricule", "Nom", "Prénom", "Date de naissance", "Sexe",
             "Moyenne T1", "Moyenne T2", "Moyenne T3",
             "Moyenne Générale", "Mention", "Action"
         ])
@@ -222,7 +222,7 @@ class NotesWindow(QMainWindow):
         self.btn_refresh.clicked.connect(self.rafraichir_liste)
         self.btn_calculer.clicked.connect(self.calculer_moyennes)
         self.btn_enregistrer.clicked.connect(self.enregistrer_notes)
-        self.btn_afficher.clicked.connect(self.afficher_etudiants)
+        # self.btn_afficher.clicked.connect(self.afficher_etudiants)
         self.table_etudiants.itemSelectionChanged.connect(self.on_etudiant_selected)
 
     def rafraichir_liste(self):
@@ -294,26 +294,23 @@ class NotesWindow(QMainWindow):
             self.table_etudiants.setRowCount(0)  # Vide le tableau avant de le remplir
 
             for row, etudiant in enumerate(etudiants_filtres):
-                if not etudiant["matricule"].strip():
-                    continue  # Ignore la ligne vide
-
-                # Calculer les moyennes pour cet étudiant
                 moyennes_trim = self.calculer_moyennes_trimestres(etudiant["matricule"])
                 moyenne_generale = 0.0
                 if all(trim in moyennes_trim for trim in [1, 2, 3]):
                     moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
-
                 mention = ResultatEtudiant.calculer_mention(moyenne_generale)
 
                 self.table_etudiants.insertRow(row)
                 self.table_etudiants.setItem(row, 0, QTableWidgetItem(etudiant["matricule"]))
                 self.table_etudiants.setItem(row, 1, QTableWidgetItem(etudiant["nom"]))
                 self.table_etudiants.setItem(row, 2, QTableWidgetItem(etudiant["prenom"]))
-                self.table_etudiants.setItem(row, 3, QTableWidgetItem(f"{moyennes_trim.get(1, 0.0):.2f}"))
-                self.table_etudiants.setItem(row, 4, QTableWidgetItem(f"{moyennes_trim.get(2, 0.0):.2f}"))
-                self.table_etudiants.setItem(row, 5, QTableWidgetItem(f"{moyennes_trim.get(3, 0.0):.2f}"))
-                self.table_etudiants.setItem(row, 6, QTableWidgetItem(f"{moyenne_generale:.2f}"))
-                self.table_etudiants.setItem(row, 7, QTableWidgetItem(mention))
+                self.table_etudiants.setItem(row, 3, QTableWidgetItem(etudiant["date_naissance"]))
+                self.table_etudiants.setItem(row, 4, QTableWidgetItem(etudiant["sexe"]))
+                self.table_etudiants.setItem(row, 5, QTableWidgetItem(f"{moyennes_trim[1]:.2f}"))
+                self.table_etudiants.setItem(row, 6, QTableWidgetItem(f"{moyennes_trim[2]:.2f}"))
+                self.table_etudiants.setItem(row, 7, QTableWidgetItem(f"{moyennes_trim[3]:.2f}"))
+                self.table_etudiants.setItem(row, 8, QTableWidgetItem(f"{moyenne_generale:.2f}"))
+                self.table_etudiants.setItem(row, 9, QTableWidgetItem(mention))
 
                 # Créer le bouton "Gérer les notes"
                 btn_notes = QPushButton("Gérer les notes")
@@ -341,7 +338,7 @@ class NotesWindow(QMainWindow):
                         niveau=self.niveau_combo.currentText()
                     )
                 ))
-                self.table_etudiants.setCellWidget(row, 8, btn_notes)
+                self.table_etudiants.setCellWidget(row, 10, btn_notes)
             
             self.statusBar().showMessage(f"{len(etudiants_filtres)} étudiant(s) trouvé(s) pour {niveau} - {filiere}", 3000)
         except Exception as e:
@@ -349,31 +346,32 @@ class NotesWindow(QMainWindow):
             self.statusBar().showMessage("Erreur lors du chargement des étudiants", 3000)
 
     def calculer_moyennes_trimestres(self, matricule):
-        """Calcule les moyennes pour chaque trimestre"""
-        try:
-            notes_par_matiere = self.db.get_notes_etudiant(matricule)
-            moyennes_trim = {1: 0.0, 2: 0.0, 3: 0.0}
-            coef_total = {1: 0, 2: 0, 3: 0}
-            
-            for matiere_id, notes_trimestres in notes_par_matiere.items():
-                # Récupérer le coefficient de la matière
-                cursor = self.db.conn.execute("SELECT coefficient FROM matieres WHERE id = ?", (matiere_id,))
-                coef = cursor.fetchone()[0]
-                
-                for trim, note in notes_trimestres.items():
-                    if note.moyenne is not None:
-                        moyennes_trim[trim] += note.moyenne * coef
-                        coef_total[trim] += coef
-            
-            # Calculer les moyennes finales par trimestre
-            for trim in moyennes_trim:
-                if coef_total[trim] > 0:
-                    moyennes_trim[trim] = moyennes_trim[trim] / coef_total[trim]
-                    
-            return moyennes_trim
-        except Exception as e:
-            print(f"Erreur calcul moyennes trimestres: {str(e)}")
-            return {1: 0.0, 2: 0.0, 3: 0.0}
+        niveau = self.niveau_combo.currentText()
+        filiere = self.filiere_combo.currentText()
+        nom_fichier = f"notes_{niveau}_{filiere}.txt"
+        moyennes = {1: 0.0, 2: 0.0, 3: 0.0}
+        coefs = {1: 0, 2: 0, 3: 0}
+        totaux = {1: 0.0, 2: 0.0, 3: 0.0}
+        if not os.path.exists(nom_fichier):
+            return moyennes
+        with open(nom_fichier, "r", encoding="utf-8") as f:
+            for ligne in f:
+                parts = ligne.strip().split("|")
+                if len(parts) == 5:
+                    m, matiere, note_cc, note_exam, trimestre = parts
+                    if m == matricule:
+                        trimestre = int(trimestre)
+                        note_cc = float(note_cc)
+                        note_exam = float(note_exam)
+                        # Adapte le calcul selon ta règle
+                        moyenne = 0.4 * note_cc + 0.6 * note_exam
+                        coef = 1  # Mets le vrai coefficient si tu l'as
+                        totaux[trimestre] += moyenne * coef
+                        coefs[trimestre] += coef
+        for t in [1, 2, 3]:
+            if coefs[t] > 0:
+                moyennes[t] = round(totaux[t] / coefs[t], 2)
+        return moyennes
 
     def afficher_notes(self, etudiant):
         self.selected_etudiant = etudiant
@@ -428,27 +426,43 @@ class NotesWindow(QMainWindow):
     def enregistrer_notes(self):
         if not self.selected_etudiant:
             return
-            
+
+        niveau = self.selected_etudiant.niveau
+        filiere = self.selected_etudiant.filiere
+        matricule = self.selected_etudiant.matricule
+        trimestre = self.trimestre_combo.currentIndex() + 1  # 1, 2 ou 3
+
         try:
+            notes_data = []
+            total = 0
+            coef_total = 0
             for row in range(self.table_notes.rowCount()):
                 matiere = self.matieres[row]
                 note_cc = self.table_notes.cellWidget(row, 2).value()
                 note_exam = self.table_notes.cellWidget(row, 3).value()
-                
-                note = Note(
-                    id=None,
-                    etudiant_matricule=self.selected_etudiant.matricule,
-                    matiere_id=matiere.id,
-                    trimestre=self.current_trimestre,
-                    note_cc=note_cc if note_cc > 0 else None,
-                    note_exam=note_exam if note_exam > 0 else None
-                )
-                
-                self.db.ajouter_note(note)
-            
-            QMessageBox.information(self, "Succès", "Les notes ont été enregistrées avec succès!")
-            self.charger_classement()  # Rafraîchir le classement
-            
+                moyenne = round(0.4 * note_cc + 0.6 * note_exam, 2)
+                notes_data.append(f"{matricule}|{matiere.nom}|{note_cc:.2f}|{note_exam:.2f}|{trimestre}")
+                total += moyenne * matiere.coefficient
+                coef_total += matiere.coefficient
+
+            moyenne_trim = round(total / coef_total, 2) if coef_total > 0 else 0.0
+
+            # Nom du fichier par niveau et filière
+            nom_fichier = f"notes_{niveau}_{filiere}.txt"
+            with open(nom_fichier, "a", encoding="utf-8") as f:
+                for ligne in notes_data:
+                    f.write(ligne + "\n")
+
+            # Met à jour la colonne du trimestre choisi dans le tableau principal
+            selected_rows = self.table_etudiants.selectionModel().selectedRows()
+            if selected_rows:
+                row = selected_rows[0].row()
+                col = 5 + (trimestre - 1)  # 5 = colonne Moyenne T1
+                self.table_etudiants.setItem(row, col, QTableWidgetItem(f"{moyenne_trim:.2f}"))
+
+            QMessageBox.information(self, "Succès", f"Les notes ont été enregistrées et la moyenne du trimestre {trimestre} est {moyenne_trim:.2f} !")
+            self.charger_classement()  # Rafraîchir le classement si besoin
+
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible d'enregistrer les notes: {str(e)}")
 
@@ -515,7 +529,17 @@ class NotesWindow(QMainWindow):
                         background-color: #1976D2;
                     }
                 """)
-                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(e))
+                btn_notes.clicked.connect(lambda checked, e=etudiant: self.afficher_notes(
+                    Etudiant(
+                        matricule=e["matricule"],
+                        nom=e["nom"],
+                        prenom=e["prenom"],
+                        date_naissance=e["date_naissance"],
+                        sexe=e["sexe"],
+                        filiere=self.filiere_combo.currentText(),
+                        niveau=self.niveau_combo.currentText()
+                    )
+                ))
                 self.table_etudiants.setCellWidget(row, 8, btn_notes)
             
             # Afficher un message de statut
@@ -623,13 +647,14 @@ class NotesWindow(QMainWindow):
         matricule = self.table_etudiants.item(row, 0).text()
         nom = self.table_etudiants.item(row, 1).text()
         prenom = self.table_etudiants.item(row, 2).text()
-        # Crée un objet Etudiant ou récupère-le selon ta logique
+        date_naissance = self.table_etudiants.item(row, 3).text()
+        sexe = self.table_etudiants.item(row, 4).text()
         etudiant = Etudiant(
             matricule=matricule,
             nom=nom,
             prenom=prenom,
-            date_naissance="",  # À compléter si besoin
-            sexe="",            # À compléter si besoin
+            date_naissance=date_naissance,
+            sexe=sexe,
             filiere=self.filiere_combo.currentText(),
             niveau=self.niveau_combo.currentText()
         )
