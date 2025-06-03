@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import pandas as pd
 
+
 class NotesWindow(QDialog):
     def __init__(self, matricule=None, niveau=None, filiere=None, parent=None):
         super().__init__(parent)
@@ -25,12 +26,20 @@ class NotesWindow(QDialog):
     def setup_ui(self):
         self.setWindowTitle("Gestion des Notes")
         self.setMinimumSize(1200, 700)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f5f5f5;
+            }
+            QLabel {
+                color: #333;
+            }
+        """)
 
         # Layout principal
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(15)
 
         # Créer une barre de statut
         self.statusBar = QStatusBar()
@@ -49,10 +58,11 @@ class NotesWindow(QDialog):
             self.niveau_combo.setCurrentText(self.niveau)
         self.niveau_combo.setStyleSheet("""
             QComboBox {
-                padding: 5px;
+                padding: 8px;
                 border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 150px;
+                border-radius: 4px;
+                min-width: 180px;
+                font-size: 14px;
             }
         """)
         niveau_group.addWidget(niveau_label)
@@ -65,10 +75,11 @@ class NotesWindow(QDialog):
         self.filiere_combo = QComboBox()
         self.filiere_combo.setStyleSheet("""
             QComboBox {
-                padding: 5px;
+                padding: 8px;
                 border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 150px;
+                border-radius: 4px;
+                min-width: 180px;
+                font-size: 14px;
             }
         """)
         filiere_group.addWidget(filiere_label)
@@ -80,13 +91,14 @@ class NotesWindow(QDialog):
         trimestre_label.setStyleSheet("font-weight: bold;")
         self.trimestre_combo = QComboBox()
         self.trimestre_combo.addItems(['Trimestre 1', 'Trimestre 2', 'Trimestre 3'])
-        self.trimestre_combo.setCurrentIndex(0)  # Par défaut, premier trimestre
+        self.trimestre_combo.setCurrentIndex(0)
         self.trimestre_combo.setStyleSheet("""
             QComboBox {
-                padding: 5px;
+                padding: 8px;
                 border: 1px solid #ccc;
-                border-radius: 3px;
-                min-width: 150px;
+                border-radius: 4px;
+                min-width: 180px;
+                font-size: 14px;
             }
         """)
         trimestre_group.addWidget(trimestre_label)
@@ -100,6 +112,7 @@ class NotesWindow(QDialog):
         
         # Boutons d'action
         buttons_group = QHBoxLayout()
+        buttons_group.setSpacing(10)
         
         # Bouton Rafraîchir
         self.btn_refresh = QPushButton("Rafraîchir")
@@ -111,6 +124,7 @@ class NotesWindow(QDialog):
                 border-radius: 4px;
                 font-weight: bold;
                 min-width: 100px;
+                font-size: 14px;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -118,7 +132,7 @@ class NotesWindow(QDialog):
         """)
         
         # Bouton pour exporter les moyennes vers Excel
-        self.btn_export_excel = QPushButton("Exporter Moyennes Excel")
+        self.btn_export_excel = QPushButton("Exporter Moyennes")
         self.btn_export_excel.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -127,31 +141,33 @@ class NotesWindow(QDialog):
                 border-radius: 4px;
                 font-weight: bold;
                 min-width: 100px;
+                font-size: 14px;
             }
             QPushButton:hover {
                 background-color: #1976D2;
             }
         """)
         
-        # Nouveau bouton pour exporter tous les étudiants
-        self.btn_export_all = QPushButton("Exporter TOUS les étudiants")
+        # Bouton pour exporter tous les étudiants
+        self.btn_export_all = QPushButton("Exporter Tous")
         self.btn_export_all.setStyleSheet("""
             QPushButton {
-                background-color: orange;
+                background-color: #FF9800;
                 color: white;
                 padding: 8px 15px;
                 border-radius: 4px;
                 font-weight: bold;
                 min-width: 100px;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #e69500;
+                background-color: #e68a00;
             }
         """)
         
         buttons_group.addWidget(self.btn_refresh)
         buttons_group.addWidget(self.btn_export_excel)
-        buttons_group.addWidget(self.btn_export_all)  # Ajouter le bouton "Exporter TOUS les étudiants"
+        buttons_group.addWidget(self.btn_export_all)
         filter_layout.addLayout(buttons_group)
         
         main_layout.addLayout(filter_layout)
@@ -173,13 +189,14 @@ class NotesWindow(QDialog):
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 background-color: white;
+                font-size: 14px;
             }
             QTableWidget::item {
-                padding: 5px;
+                padding: 8px;
             }
             QHeaderView::section {
                 background-color: #f5f5f5;
-                padding: 5px;
+                padding: 10px;
                 border: none;
                 border-right: 1px solid #ddd;
                 border-bottom: 1px solid #ddd;
@@ -190,11 +207,12 @@ class NotesWindow(QDialog):
         
         # Section des notes
         notes_layout = QVBoxLayout()
+        notes_layout.setSpacing(15)
         
         notes_header = QHBoxLayout()
         notes_header.addWidget(QLabel("Notes de l'étudiant:"))
         self.etudiant_label = QLabel("Aucun étudiant sélectionné")
-        self.etudiant_label.setStyleSheet("font-weight: bold;")
+        self.etudiant_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #333;")
         notes_header.addWidget(self.etudiant_label)
         notes_header.addStretch()
         
@@ -208,12 +226,62 @@ class NotesWindow(QDialog):
         ])
         self.table_notes.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_notes.setAlternatingRowColors(True)
+        self.table_notes.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 8px;
+            }
+            QHeaderView::section {
+                background-color: #f5f5f5;
+                padding: 10px;
+                border: none;
+                border-right: 1px solid #ddd;
+                border-bottom: 1px solid #ddd;
+                font-weight: bold;
+            }
+        """)
         notes_layout.addWidget(self.table_notes)
         
         # Boutons
         buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        
         self.btn_enregistrer = QPushButton("Enregistrer les notes")
+        self.btn_enregistrer.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 100px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        
         self.btn_calculer = QPushButton("Calculer les moyennes")
+        self.btn_calculer.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 100px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
         
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.btn_calculer)
@@ -237,7 +305,7 @@ class NotesWindow(QDialog):
         self.btn_calculer.clicked.connect(self.calculer_moyennes)
         self.btn_enregistrer.clicked.connect(self.enregistrer_notes)
         self.btn_export_excel.clicked.connect(self.exporter_moyennes_excel)
-        self.btn_export_all.clicked.connect(self.exporter_tous_les_etudiants_excel)  # Connexion du nouveau bouton
+        self.btn_export_all.clicked.connect(self.exporter_tous_les_etudiants_excel)
         self.table_etudiants.itemSelectionChanged.connect(self.on_etudiant_selected)
 
     def rafraichir_liste(self):
@@ -246,12 +314,15 @@ class NotesWindow(QDialog):
             niveau = self.niveau_combo.currentText()
             filiere = self.filiere_combo.currentText()
             
-            if niveau and filiere:
-                self.charger_classement()
-                self.statusBar.showMessage("Liste des étudiants rafraîchie", 3000)
+            if not niveau or not filiere:
+                QMessageBox.warning(self, "Attention", "Veuillez sélectionner un niveau et une filière")
+                return
+                
+            self.charger_classement()
+            self.statusBar.showMessage(f"Liste des étudiants rafraîchie pour {niveau} - {filiere}", 3000)
         except Exception as e:
-            print(f"Erreur lors du rafraîchissement: {str(e)}")
-            QMessageBox.critical(self, "Erreur", "Impossible de rafraîchir la liste des étudiants")
+            QMessageBox.critical(self, "Erreur", f"Impossible de rafraîchir la liste des étudiants: {str(e)}")
+            self.statusBar.showMessage("Erreur lors du rafraîchissement", 3000)
 
     def niveau_change(self, niveau):
         """Met à jour les filières disponibles en fonction du niveau sélectionné"""
@@ -259,20 +330,18 @@ class NotesWindow(QDialog):
             self.filiere_combo.clear()
             if niveau in Etudiant.FILIERES:
                 self.filiere_combo.addItems(Etudiant.FILIERES[niveau])
-                print(f"Filières chargées pour {niveau}: {Etudiant.FILIERES[niveau]}")  # Debug
+                if self.filiere and self.filiere in Etudiant.FILIERES[niveau]:
+                    self.filiere_combo.setCurrentText(self.filiere)
             self.charger_classement()
         except Exception as e:
-            print(f"Erreur dans niveau_change: {str(e)}")  # Debug
             QMessageBox.critical(self, "Erreur", f"Erreur lors du changement de niveau : {str(e)}")
 
     def filiere_change(self, filiere):
         """Met à jour la liste des étudiants quand la filière change"""
         try:
             if filiere:  # Vérifier que la filière n'est pas vide
-                print(f"Changement de filière vers: {filiere}")  # Debug
                 self.charger_classement()
         except Exception as e:
-            print(f"Erreur dans filiere_change: {str(e)}")  # Debug
             QMessageBox.critical(self, "Erreur", f"Erreur lors du changement de filière : {str(e)}")
 
     def trimestre_change(self, index):
@@ -316,7 +385,7 @@ class NotesWindow(QDialog):
             self.table_etudiants.setRowCount(0)  # Vide le tableau avant de le remplir
 
             for row, etudiant in enumerate(etudiants_filtres):
-                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule)
+                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule, etudiant.niveau, etudiant.filiere)
                 moyenne_generale = 0.0
                 if all(trim in moyennes_trim for trim in [1, 2, 3]):
                     moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
@@ -340,7 +409,7 @@ class NotesWindow(QDialog):
                 self.table_etudiants.setItem(row, 8, QTableWidgetItem(f"{moyenne_generale:.2f}"))
                 self.table_etudiants.setItem(row, 9, QTableWidgetItem(mention))
                 self.table_etudiants.setItem(row, 10, QTableWidgetItem(decision))
-
+                
                 # Créer le bouton "Gérer les notes"
                 btn_notes = QPushButton("Gérer les notes")
                 btn_notes.setStyleSheet("""
@@ -350,6 +419,7 @@ class NotesWindow(QDialog):
                         border: none;
                         padding: 5px;
                         border-radius: 3px;
+                        min-width: 100px;
                     }
                     QPushButton:hover {
                         background-color: #1976D2;
@@ -376,13 +446,16 @@ class NotesWindow(QDialog):
                     champs = ligne.strip().split('|')
                     if len(champs) == 7:
                         matricule, nom, prenom, date_naissance, sexe, filiere, niveau = champs
-                        # Calcul des moyennes pour chaque étudiant
                         moyennes_trim = self.calculer_moyennes_trimestres(matricule, niveau, filiere)
                         moyenne_generale = 0.0
                         if all(trim in moyennes_trim for trim in [1, 2, 3]):
                             moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
                         mention = ResultatEtudiant.calculer_mention(moyenne_generale)
-                        decision = "Admis" if moyenne_generale >= 10 else "Refusé"
+                        # Décision BAC
+                        if niveau.lower() == "bac" and 7.0 <= moyenne_generale < 10.0:
+                            decision = "Contrôle"
+                        else:
+                            decision = "Admis" if moyenne_generale >= 10 else "Refusé"
                         data.append({
                             "Matricule": matricule,
                             "Nom": nom,
@@ -406,6 +479,10 @@ class NotesWindow(QDialog):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             nom_fichier = f"tous_les_etudiants_{timestamp}.xlsx"
             df.to_excel(nom_fichier, index=False)
+            
+            # Ouvrir le répertoire contenant le fichier exporté
+            os.startfile(os.path.dirname(os.path.abspath(nom_fichier)))
+            
             QMessageBox.information(self, "Succès", f"Exportation réussie vers {nom_fichier}")
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur lors de l'exportation : {str(e)}")
@@ -416,34 +493,46 @@ class NotesWindow(QDialog):
             niveau = self.niveau_combo.currentText()
         if filiere is None:
             filiere = self.filiere_combo.currentText()
+            
         nom_fichier = f"notes_{niveau}_{filiere}.txt"
         moyennes = {1: 0.0, 2: 0.0, 3: 0.0}
         coefs = {1: 0, 2: 0, 3: 0}
         totaux = {1: 0.0, 2: 0.0, 3: 0.0}
 
+        # Charger les matières pour avoir les coefficients
+        matieres = self.db.get_matieres(niveau, filiere)
+        if not matieres:
+            return moyennes
+            
+        coef_matieres = {m.nom: m.coefficient for m in matieres}
+
         if not os.path.exists(nom_fichier):
             return moyennes
 
-        with open(nom_fichier, "r", encoding="utf-8") as f:
-            for ligne in f:
-                parts = ligne.strip().split("|")
-                if len(parts) == 5:
-                    m, matiere, note_cc, note_exam, trimestre = parts
-                    if m == matricule:
-                        try:
-                            trimestre = int(trimestre)
-                            note_cc = float(note_cc)
-                            note_exam = float(note_exam)
-                            moyenne = 0.4 * note_cc + 0.6 * note_exam
-                            coef = 1  # À remplacer par le vrai coefficient si disponible
-                            totaux[trimestre] += moyenne * coef
-                            coefs[trimestre] += coef
-                        except ValueError:
-                            continue
+        try:
+            with open(nom_fichier, "r", encoding="utf-8") as f:
+                for ligne in f:
+                    parts = ligne.strip().split("|")
+                    if len(parts) == 5:
+                        m, matiere, note_cc, note_exam, trimestre = parts
+                        if m == matricule:
+                            try:
+                                trimestre = int(trimestre)
+                                note_cc = float(note_cc)
+                                note_exam = float(note_exam)
+                                moyenne = 0.4 * note_cc + 0.6 * note_exam
+                                coef = coef_matieres.get(matiere, 1)
+                                totaux[trimestre] += moyenne * coef
+                                coefs[trimestre] += coef
+                            except ValueError:
+                                continue
 
-        for t in [1, 2, 3]:
-            if coefs[t] > 0:
-                moyennes[t] = round(totaux[t] / coefs[t], 2)
+            for t in [1, 2, 3]:
+                if coefs[t] > 0:
+                    moyennes[t] = round(totaux[t] / coefs[t], 2)
+        except Exception as e:
+            print(f"Erreur calcul moyennes trimestres: {str(e)}")
+            
         return moyennes
 
     def afficher_notes(self, etudiant):
@@ -454,6 +543,10 @@ class NotesWindow(QDialog):
         try:
             # Récupérer les matières pour ce niveau et cette filière
             self.matieres = self.db.get_matieres(etudiant.niveau, etudiant.filiere)
+            if not self.matieres:
+                QMessageBox.warning(self, "Attention", "Aucune matière trouvée pour ce niveau et cette filière")
+                return
+                
             self.table_notes.setRowCount(len(self.matieres))
             
             # Charger les notes existantes pour cet étudiant et ce trimestre
@@ -483,12 +576,14 @@ class NotesWindow(QDialog):
                 note_cc.setRange(0, 20)
                 note_cc.setDecimals(2)
                 note_cc.setSingleStep(0.5)
+                note_cc.setAlignment(Qt.AlignCenter)
                 
                 # Note Examen (input)
                 note_exam = QDoubleSpinBox()
                 note_exam.setRange(0, 20)
                 note_exam.setDecimals(2)
                 note_exam.setSingleStep(0.5)
+                note_exam.setAlignment(Qt.AlignCenter)
                 
                 # Pré-remplir si note existante
                 if matiere.nom in notes_existantes:
@@ -500,6 +595,7 @@ class NotesWindow(QDialog):
                 
                 # Calculer et afficher la moyenne si les notes existent
                 moyenne_item = QTableWidgetItem()
+                moyenne_item.setTextAlignment(Qt.AlignCenter)
                 if matiere.nom in notes_existantes:
                     moyenne = 0.4 * notes_existantes[matiere.nom][0] + 0.6 * notes_existantes[matiere.nom][1]
                     moyenne_item.setText(f"{moyenne:.2f}")
@@ -515,13 +611,22 @@ class NotesWindow(QDialog):
 
     def calculer_moyennes(self):
         """Calcule les moyennes pour toutes les matières"""
+        if not self.selected_etudiant:
+            QMessageBox.warning(self, "Attention", "Veuillez sélectionner un étudiant")
+            return
+
         try:
             for row in range(self.table_notes.rowCount()):
                 note_cc = self.table_notes.cellWidget(row, 2).value()
                 note_exam = self.table_notes.cellWidget(row, 3).value()
                 
                 moyenne = round(0.4 * note_cc + 0.6 * note_exam, 2)
-                self.table_notes.item(row, 4).setText(f"{moyenne:.2f}")
+                item = self.table_notes.item(row, 4)
+                if item is None:
+                    item = QTableWidgetItem()
+                    item.setTextAlignment(Qt.AlignCenter)
+                    self.table_notes.setItem(row, 4, item)
+                item.setText(f"{moyenne:.2f}")
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Erreur lors du calcul des moyennes: {str(e)}")
 
@@ -582,7 +687,8 @@ class NotesWindow(QDialog):
 
             # Mettre à jour l'affichage
             self.charger_classement()
-            QMessageBox.information(self, "Succès", f"Les notes ont été enregistrées et la moyenne du trimestre {trimestre} est {moyenne_trim:.2f} !")
+            QMessageBox.information(self, "Succès", 
+                f"Les notes ont été enregistrées et la moyenne du trimestre {trimestre} est {moyenne_trim:.2f} !")
 
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible d'enregistrer les notes: {str(e)}")
@@ -592,14 +698,25 @@ class NotesWindow(QDialog):
         selected_rows = self.table_etudiants.selectionModel().selectedRows()
         if not selected_rows:
             return
-            
+
         row = selected_rows[0].row()
-        matricule = self.table_etudiants.item(row, 0).text()
-        nom = self.table_etudiants.item(row, 1).text()
-        prenom = self.table_etudiants.item(row, 2).text()
-        date_naissance = self.table_etudiants.item(row, 3).text()
-        sexe = self.table_etudiants.item(row, 4).text()
-        
+        # Récupérer chaque item et vérifier qu'il n'est pas None
+        matricule_item = self.table_etudiants.item(row, 0)
+        nom_item = self.table_etudiants.item(row, 1)
+        prenom_item = self.table_etudiants.item(row, 2)
+        date_naissance_item = self.table_etudiants.item(row, 3)
+        sexe_item = self.table_etudiants.item(row, 4)
+
+        if not all([matricule_item, nom_item, prenom_item, date_naissance_item, sexe_item]):
+            QMessageBox.warning(self, "Erreur", "Impossible de récupérer les informations de l'étudiant sélectionné.")
+            return
+
+        matricule = matricule_item.text()
+        nom = nom_item.text()
+        prenom = prenom_item.text()
+        date_naissance = date_naissance_item.text()
+        sexe = sexe_item.text()
+
         etudiant = Etudiant(
             matricule=matricule,
             nom=nom,
@@ -624,7 +741,7 @@ class NotesWindow(QDialog):
             filiere = self.filiere_combo.currentText()
             
             for etudiant in self.etudiants:
-                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule)
+                moyennes_trim = self.calculer_moyennes_trimestres(etudiant.matricule, etudiant.niveau, etudiant.filiere)
                 moyenne_generale = 0.0
                 if all(trim in moyennes_trim for trim in [1, 2, 3]):
                     moyenne_generale = (moyennes_trim[1] + moyennes_trim[2] + (2 * moyennes_trim[3])) / 4
@@ -640,7 +757,7 @@ class NotesWindow(QDialog):
                     "Moyenne T3": moyennes_trim.get(3, 0.0),
                     "Moyenne Générale": moyenne_generale,
                     "Mention": ResultatEtudiant.calculer_mention(moyenne_generale),
-                    "Décision": "Admis" if moyenne_generale >= 10 else "Refusé"
+                    "Décision": "Contrôle" if niveau.lower() == "bac" and 7.0 <= moyenne_generale < 10.0 else ("Admis" if moyenne_generale >= 10 else "Refusé")
                 })
 
             # Créer le DataFrame et exporter
@@ -651,6 +768,10 @@ class NotesWindow(QDialog):
             nom_fichier = f"moyennes_{niveau}_{filiere}_{timestamp}.xlsx"
             
             df.to_excel(nom_fichier, index=False)
+            
+            # Ouvrir le répertoire contenant le fichier exporté
+            os.startfile(os.path.dirname(os.path.abspath(nom_fichier)))
+            
             QMessageBox.information(self, "Succès", f"Exportation réussie vers {nom_fichier}")
             
         except Exception as e:

@@ -84,12 +84,33 @@ class Etudiant:
     filiere: str
     niveau: str
 
-    NIVEAUX = ["1ère année", "2ème année", "3ème année", "Bac"]
+    NIVEAUX = [
+        "1ère année", "2ème année", "3ème année", "Bac"
+    ]
     FILIERES = {
         "1ère année": ["Tronc Commun"],
-        "2ème année": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"],
-        "3ème année": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"],
-        "Bac": ["Sciences Expérimentales", "Mathématiques", "Techniques Mathématiques", "Gestion et Économie","Informatique", "Lettres"]
+        "2ème année": [
+            "Lettres",
+            "Economie-Gestion",
+            "Science",
+            "Informatique"
+        ],
+        "3ème année": [
+            "Lettres",
+            "Economie-Gestion",
+            "Science",
+            "Informatique",
+            "Mathématique",
+            "Technique"
+        ],
+        "Bac": [
+            "Lettres",
+            "Economie-Gestion",
+            "Science",
+            "Informatique",
+            "Mathématique",
+            "Technique"
+        ]
     }
     
     def __post_init__(self):

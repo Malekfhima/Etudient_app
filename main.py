@@ -176,7 +176,7 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
             self.effacer_formulaire()
             self.btn_modifier.setEnabled(False)
             self.btn_supprimer.setEnabled(False)
-            self.btn_notes.setEnabled(False)
+            self.btn_notes.setEnabled(True)  # Toujours actif, même sans sélection
 
     def remplir_formulaire(self, row):
         self.current_matricule = self.table_etudiants.item(row, 0).text()
@@ -357,14 +357,14 @@ class GestionEtudiantsApp(QMainWindow, Ui_MainWindow):
 
         if reponse == QMessageBox.Yes:
             try:
-                # Supprimer l'étudiant
+                # Supprimer l'étudiant de la base
                 if self.db.supprimer_etudiant(self.current_matricule):
                     # Mettre à jour le fichier texte
                     self.mettre_a_jour_fichier_txt()
-                    
-                    QMessageBox.information(self, "Succès", "Étudiant supprimé avec succès!")
+                    # Mettre à jour la table et effacer le formulaire
                     self.charger_etudiants()
                     self.effacer_formulaire()
+                    QMessageBox.information(self, "Succès", "Étudiant supprimé avec succès!")
                 else:
                     QMessageBox.critical(self, "Erreur", "Impossible de supprimer l'étudiant")
             except Exception as e:
